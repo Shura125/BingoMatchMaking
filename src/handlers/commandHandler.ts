@@ -25,7 +25,6 @@ import {
   buildTicketEmbed,
 } from "../ui/ticketRenderer";
 
-
 function getMatchModeNames(match: {
   veilbreak: boolean;
   base_game: boolean;
@@ -126,6 +125,7 @@ function getQuickModeLabel(mode: QuickMode): string {
   if (mode === "veilbreak") return "Veilbreak";
   if (mode === "base_game") return "Base Game";
   if (mode === "scadubingo") return "Scadubingo";
+
   return mode;
 }
 
@@ -134,7 +134,9 @@ async function createQuickCasualTicket(
   interaction: ChatInputCommandInteraction,
   mode: QuickMode
 ) {
-  const alreadyActive = await userHasActiveTicketOrAcceptance(interaction.user.id);
+  const alreadyActive = await userHasActiveTicketOrAcceptance(
+    interaction.user.id
+  );
 
   if (alreadyActive) {
     await interaction.reply({
@@ -181,15 +183,18 @@ async function createQuickCasualTicket(
   }
 
   const sentMessage = await channel.send({
+    content: `<@&${config.bingoPlayersRoleId}>`,
     embeds: [buildTicketEmbed(ticket, [])],
     components: buildTicketButtons(ticket),
+    allowedMentions: {
+      roles: [config.bingoPlayersRoleId],
+    },
   });
 
   await updateTicketMessageId(ticket.id, sentMessage.id);
 
   await interaction.reply({
-    content:
-      `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${config.matchmakingChannelId}>.`,
+    content: `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${config.matchmakingChannelId}>.`,
     ephemeral: true,
   });
 }
@@ -198,7 +203,6 @@ export async function handleChatInputCommand(
   client: Client,
   interaction: ChatInputCommandInteraction
 ) {
-
   if (interaction.commandName === "veilbreak") {
     await createQuickCasualTicket(client, interaction, "veilbreak");
     return;
@@ -214,9 +218,10 @@ export async function handleChatInputCommand(
     return;
   }
 
-
   if (interaction.commandName === "creatematch") {
-    const alreadyActive = await userHasActiveTicketOrAcceptance(interaction.user.id);
+    const alreadyActive = await userHasActiveTicketOrAcceptance(
+      interaction.user.id
+    );
 
     if (alreadyActive) {
       await interaction.reply({
@@ -240,7 +245,7 @@ export async function handleChatInputCommand(
     await handleForceCloseCommand(client, interaction);
     return;
   }
-  
+
   if (interaction.commandName === "removeplayer") {
     await handleRemovePlayerCommand(client, interaction);
     return;
@@ -263,7 +268,9 @@ export async function handleChatInputCommand(
       content:
         `You are currently on an active ticket as **${role}**.\n` +
         `Status: **${ticket.status.toUpperCase()}**\n` +
-        (ticketUrl ? `Ticket: ${ticketUrl}` : "Ticket message link is not available yet."),
+        (ticketUrl
+          ? `Ticket: ${ticketUrl}`
+          : "Ticket message link is not available yet."),
       ephemeral: true,
     });
 
@@ -339,7 +346,6 @@ export async function handleChatInputCommand(
     return;
   }
 
-
   if (interaction.commandName === "recentmatches") {
     const matches = await getRecentMatches(10);
 
@@ -365,7 +371,7 @@ export async function handleChatInputCommand(
 
   if (interaction.commandName === "openmatches") {
     const tickets = await getOpenMatchTickets();
-    
+
     if (tickets.length === 0) {
       await interaction.reply({
         content: "There are no open or started matchmaking tickets right now.",
@@ -373,17 +379,17 @@ export async function handleChatInputCommand(
       });
       return;
     }
-  
+
     const description = tickets
       .slice(0, 10)
       .map((ticket, index) => `${index + 1}. ${formatOpenTicketLine(ticket)}`)
       .join("\n\n");
-  
+
     await interaction.reply({
       content: `## Open Matches\n\n${description}`,
       ephemeral: false,
     });
-  
+
     return;
   }
 }
