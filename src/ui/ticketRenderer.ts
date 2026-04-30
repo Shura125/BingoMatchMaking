@@ -90,8 +90,8 @@ export function buildTicketEmbed(
 
   const title =
     ticket.matchmaking_type === "competitive"
-      ? ":Ignite: Official Matchmaking Ticket"
-      : ":AngryAlex: Casual Matchmaking Ticket";
+      ? ":trophy: Official Matchmaking Ticket"
+      : ":sunglasses: Casual Matchmaking Ticket";
 
   const color =
     ticket.status === "open"
