@@ -1,0 +1,38 @@
+stages:
+  - dockerize
+  - deploy
+
+dockerize-job:
+  stage: dockerize
+  tags:
+    - vps-deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "release"'
+  script:
+    - echo "Logging into GitLab Container Registry"
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - echo "Building latest image"
+    - docker build -t "$CI_REGISTRY_IMAGE:latest" .
+    - echo "Tagging image with commit SHA"
+    - docker tag "$CI_REGISTRY_IMAGE:latest" "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+    - echo "Pushing latest image to registry"
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+
+deploy-job:
+  stage: deploy
+  tags:
+    - vps-deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "release"'
+  needs:
+    - dockerize-job
+  script:
+    - echo "Logging into GitLab Container Registry"
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - echo "Pulling latest image for bingomatchmakingbot service"
+    - docker pull "$CI_REGISTRY_IMAGE:latest"
+    - echo "Bringing down existing container"
+    - docker-compose down
+    - echo "Bringing up docker container"
+    - docker-compose up -d
