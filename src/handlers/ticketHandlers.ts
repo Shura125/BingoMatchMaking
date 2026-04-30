@@ -24,6 +24,7 @@ import {
   getStartModeOptionsForTicket,
 } from "../utils/playerLimits";
 import { buildTicketButtons, buildTicketEmbed } from "../ui/ticketRenderer";
+import { deleteTicketMessage } from "../utils/ticketCleanup";
 
 async function renderTicketMessage(ticketId: string) {
   const ticket = await fetchTicket(ticketId);
@@ -562,6 +563,21 @@ export async function handleCloseTicket(
       content: "Could not update this ticket.",
       ephemeral: true,
     });
+    return;
+  }
+
+  const deleteStatuses: Array<typeof newStatus> = ["wasnt_played", "cancelled"];
+
+  if (deleteStatuses.includes(newStatus)) {
+    await interaction.reply({
+      content:
+        newStatus === "wasnt_played"
+          ? "This ticket has been marked as wasn't played and removed."
+          : "This ticket has been cancelled and removed.",
+      ephemeral: true,
+    });
+
+    await deleteTicketMessage(interaction.client, ticket);
     return;
   }
 

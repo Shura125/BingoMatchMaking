@@ -2,6 +2,10 @@ import {
   ChatInputCommandInteraction,
   Client,
   ChannelType,
+  Message,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ComponentType,
 } from "discord.js";
 import { buildTypeButtons } from "../ui/setupComponents";
 import {
@@ -24,6 +28,7 @@ import {
   buildTicketButtons,
   buildTicketEmbed,
 } from "../ui/ticketRenderer";
+import { deleteTicketMessage } from "../utils/ticketCleanup";
 
 function getMatchModeNames(match: {
   veilbreak: boolean;
@@ -119,6 +124,85 @@ function formatRecentMatchLine(match: {
   );
 }
 
+function disableMessageButtons(message: Message) {
+  return message.components
+    .filter((row) => row.type === ComponentType.ActionRow)
+    .map((row) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+
+      for (const component of row.components) {
+        if (component.type !== ComponentType.Button) continue;
+
+        const button = ButtonBuilder.from(component).setDisabled(true);
+        newRow.addComponents(button);
+      }
+
+      return newRow;
+    });
+}
+
+async function markTicketMessageExpired(message: Message) {
+  const disabledRows = disableMessageButtons(message);
+
+  await message.edit({
+    content: "⏰ This matchmaking ticket expired because the search time ended.",
+    components: disabledRows,
+  });
+}
+
+function scheduleTicketExpiration(options: {
+  client: Client;
+  message: Message;
+  ticketId: string;
+  creatorDiscordId: string;
+  searchMinutes: number;
+  deleteAfterMs?: number;
+}) {
+  const {
+    client,
+    message,
+    ticketId,
+    creatorDiscordId,
+    searchMinutes,
+    deleteAfterMs = 5 * 60 * 1000,
+  } = options;
+
+  setTimeout(async () => {
+    try {
+      const { ticket } = await findActiveTicketForUser(creatorDiscordId);
+
+      if (!ticket) return;
+      if (ticket.id !== ticketId) return;
+
+      // Only expire tickets that are still open.
+      // If the match was started, do not auto-close it.
+      if (ticket.status !== "open") return;
+
+      
+      const success = await closeTicket(ticket, "cancelled");
+
+      if (!success) {
+        console.error(`Failed to expire ticket ${ticketId}`);
+        return;
+      }
+
+      await refreshTicketMessage(client, ticketId);
+
+      const freshMessage = await message.fetch().catch(() => null);
+
+      if (freshMessage) {
+        await markTicketMessageExpired(freshMessage);
+
+        setTimeout(async () => {
+          await freshMessage.delete().catch(() => {});
+        }, deleteAfterMs);
+      }
+    } catch (error) {
+      console.error(`Failed to run expiration for ticket ${ticketId}:`, error);
+    }
+  }, searchMinutes * 60 * 1000);
+}
+
 type QuickMode = "veilbreak" | "base_game" | "scadubingo";
 
 function getQuickModeLabel(mode: QuickMode): string {
@@ -159,6 +243,7 @@ async function createQuickCasualTicket(
   }
 
   const modeLabel = getQuickModeLabel(mode);
+  const searchMinutes = 60;
 
   const ticket = await createTicket({
     guildId: config.guildId,
@@ -167,7 +252,7 @@ async function createQuickCasualTicket(
     matchmakingType: "casual",
     hostIsPlayer: true,
     modes: [mode],
-    searchMinutes: 60,
+    searchMinutes,
     scheduledAt: null,
     scheduledTimezone: null,
     matchTitle: `${modeLabel} Casual Match`,
@@ -192,6 +277,15 @@ async function createQuickCasualTicket(
   });
 
   await updateTicketMessageId(ticket.id, sentMessage.id);
+
+  scheduleTicketExpiration({
+    client,
+    message: sentMessage,
+    ticketId: ticket.id,
+    creatorDiscordId: interaction.user.id,
+    searchMinutes,
+    deleteAfterMs: 5 * 60 * 1000,
+  });
 
   await interaction.reply({
     content: `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${config.matchmakingChannelId}>.`,
@@ -316,9 +410,10 @@ export async function handleChatInputCommand(
     }
 
     await refreshTicketMessage(client, ticket.id);
+    await deleteTicketMessage(client, ticket);
 
     await interaction.reply({
-      content: "Your matchmaking ticket has been cancelled.",
+      content: "Your matchmaking ticket has been cancelled and removed.",
       ephemeral: true,
     });
 
