@@ -123,7 +123,7 @@ export function getStartModeOptionsForTicket(
   }
 
   // Casual 1v1 modes can start with 1 accepted player.
-  // If both Base Game and Scadubingo are selected, host chooses which one.
+  // If both Base Game and Scadubingo are selected, host chooses which one. 
   if (acceptedCount >= 1 && oneVOneOptions.length > 0) {
     return {
       canStart: true,
