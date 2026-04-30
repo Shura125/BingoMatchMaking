@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  scheduler-discord-bot:
+    image: ${CI_REGISTRY_IMAGE}:latest
+    container_name: bingo-matchmaking-discord-bot
+    restart: unless-stopped
+    environment:
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      GUILD_ID: ${GUILD_ID}
+      MATCHMAKING_CHANNEL_ID: ${MATCHMAKING_CHANNEL_ID}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_URL: ${SUPABASE_URL}
