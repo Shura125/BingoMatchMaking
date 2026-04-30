@@ -5,12 +5,24 @@ import {
   EmbedBuilder,
 } from "discord.js";
 import { MatchTicket, MatchTicketAcceptance } from "../types";
+import {
+  getPlayerAcceptances,
+  getRequiredAcceptedPlayers,
+  getStartModeLabel,
+  getTotalRequiredPlayers,
+} from "../utils/playerLimits";
 
 export function getDurationText(searchMinutes: number | null | undefined): string {
   if (!searchMinutes || searchMinutes <= 0) return "Until cancelled";
   if (searchMinutes === 60) return "1 hour";
   if (searchMinutes % 60 === 0) return `${searchMinutes / 60} hours`;
   return `${searchMinutes} minutes`;
+}
+
+function getScheduledText(scheduledAt: string | null): string {
+  if (!scheduledAt) return "Not scheduled";
+
+  return `<t:${Math.floor(new Date(scheduledAt).getTime() / 1000)}:F>`;
 }
 
 export function getSessionModeNames(modes: string[] | undefined): string {
@@ -43,20 +55,31 @@ export function buildTicketEmbed(
   ticket: MatchTicket,
   acceptances: MatchTicketAcceptance[]
 ) {
-  const playerAcceptances = acceptances.filter(
-    (acceptance) => acceptance.acceptance_type === "player"
-  );
+  const playerAcceptances = getPlayerAcceptances(acceptances);
+  const requiredAcceptedPlayers = getRequiredAcceptedPlayers(ticket);
+  const totalRequiredPlayers = getTotalRequiredPlayers(ticket);
+
+  const currentPlayerCount =
+    playerAcceptances.length + (ticket.host_is_player ? 1 : 0);
 
   const refAcceptances = acceptances.filter(
     (acceptance) => acceptance.acceptance_type === "ref"
   );
 
-  const playerPriority =
-    playerAcceptances.length > 0
-      ? playerAcceptances
-          .map((acceptance, index) => `${index + 1}. <@${acceptance.discord_id}>`)
-          .join("\n")
-      : "No players yet.";
+  const waitingSlots = Math.max(
+    requiredAcceptedPlayers - playerAcceptances.length,
+    0
+  );
+
+  const acceptedPlayerLines = playerAcceptances.map(
+    (acceptance, index) => `${index + 1}. <@${acceptance.discord_id}>`
+  );
+
+  const waitingLines = Array.from({ length: waitingSlots }, (_, index) => {
+    return `${playerAcceptances.length + index + 1}. Waiting...`;
+  });
+
+  const playerPriority = [...acceptedPlayerLines, ...waitingLines].join("\n");
 
   const refPriority =
     refAcceptances.length > 0
@@ -67,8 +90,8 @@ export function buildTicketEmbed(
 
   const title =
     ticket.matchmaking_type === "competitive"
-      ? "🏆 Competitive Matchmaking Ticket"
-      : "🎮 Casual Matchmaking Ticket";
+      ? ":Ignite: Official Matchmaking Ticket"
+      : ":AngryAlex: Casual Matchmaking Ticket";
 
   const color =
     ticket.status === "open"
@@ -100,9 +123,43 @@ export function buildTicketEmbed(
         value: getModeNames(ticket),
         inline: false,
       },
+      ...(ticket.started_mode
+      ? [
+          {
+            name: "Started As",
+            value: getStartModeLabel(ticket.started_mode),
+            inline: true as const,
+          },
+        ]
+      : []),
+      ...(ticket.match_title
+        ? [
+            {
+              name: "Match Title",
+              value: ticket.match_title,
+              inline: false as const,
+            },
+          ]
+        : []),
+      ...(ticket.match_details
+        ? [
+            {
+              name: "Details",
+              value: ticket.match_details,
+              inline: false as const,
+            },
+          ]
+        : []),
       {
-        name: "Searching For",
-        value: getDurationText(ticket.search_minutes),
+        name: ticket.scheduled_at ? "Scheduled For" : "Searching For",
+        value: ticket.scheduled_at
+          ? getScheduledText(ticket.scheduled_at)
+          : getDurationText(ticket.search_minutes),
+        inline: true,
+      },
+      {
+        name: "Host Playing",
+        value: ticket.host_is_player ? "Yes" : "No",
         inline: true,
       },
       {
@@ -114,8 +171,13 @@ export function buildTicketEmbed(
         inline: false,
       },
       {
-        name: "Player Priority",
-        value: playerPriority,
+        name: `Players (${currentPlayerCount}/${totalRequiredPlayers})`,
+        value:
+          `Host: <@${ticket.creator_discord_id}>${
+            ticket.host_is_player ? " *(playing)*" : " *(not playing)*"
+          }\n` +
+          `Accepted Players: **${playerAcceptances.length}/${requiredAcceptedPlayers}**\n\n` +
+          playerPriority,
         inline: false,
       }
     )
@@ -140,9 +202,9 @@ export function buildTicketButtons(ticket: MatchTicket) {
   const canStart = ticket.status === "open";
   const canClose = ticket.status === "open" || ticket.status === "started";
 
-  const firstRow = new ActionRowBuilder<ButtonBuilder>();
+  const acceptRow = new ActionRowBuilder<ButtonBuilder>();
 
-  firstRow.addComponents(
+  acceptRow.addComponents(
     new ButtonBuilder()
       .setCustomId(`ticket_accept_player_${ticket.id}`)
       .setLabel(
@@ -155,7 +217,7 @@ export function buildTicketButtons(ticket: MatchTicket) {
   );
 
   if (ticket.matchmaking_type === "competitive") {
-    firstRow.addComponents(
+    acceptRow.addComponents(
       new ButtonBuilder()
         .setCustomId(`ticket_accept_ref_${ticket.id}`)
         .setLabel("Ref This Match")
@@ -164,13 +226,29 @@ export function buildTicketButtons(ticket: MatchTicket) {
     );
   }
 
-  const secondRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  acceptRow.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`ticket_leave_queue_${ticket.id}`)
+      .setLabel("Leave Queue")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!canAccept)
+  );
+
+  const startRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`ticket_start_${ticket.id}`)
       .setLabel("Start Game")
       .setStyle(ButtonStyle.Success)
       .setDisabled(!canStart),
 
+    new ButtonBuilder()
+      .setCustomId(`ticket_remove_player_${ticket.id}`)
+      .setLabel("Remove Player")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!canAccept)
+  );
+
+  const closeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`ticket_finish_${ticket.id}`)
       .setLabel("Finish Match")
@@ -190,5 +268,5 @@ export function buildTicketButtons(ticket: MatchTicket) {
       .setDisabled(!canClose)
   );
 
-  return [firstRow, secondRow];
+  return [acceptRow, startRow, closeRow];
 }

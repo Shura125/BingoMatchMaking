@@ -11,8 +11,15 @@ export type TicketStatus =
 
 export type PendingSession = {
   matchmakingType?: MatchmakingType;
+  hostIsPlayer?: boolean;
   modes?: string[];
   searchMinutes?: number | null;
+
+  scheduledAt?: string | null;
+  scheduledTimezone?: string | null;
+
+  matchTitle?: string | null;
+  matchDetails?: string | null;
 };
 
 export type MatchTicket = {
@@ -23,6 +30,14 @@ export type MatchTicket = {
 
   matchmaking_type: MatchmakingType;
   creator_discord_id: string;
+
+  host_is_player: boolean;
+  scheduled_at: string | null;
+  scheduled_timezone: string | null;
+
+  match_title: string | null;
+  match_details: string | null;
+  started_mode: string | null;
 
   veilbreak: boolean;
   base_game: boolean;
@@ -47,4 +62,26 @@ export type MatchTicketAcceptance = {
   discord_id: string;
   acceptance_type: AcceptanceType;
   created_at: string;
+};
+
+export type MatchRecord = {
+  id: string;
+  ticket_id: string | null;
+  guild_id: string;
+
+  matchmaking_type: MatchmakingType;
+  started_mode: string | null;
+
+  player1_discord_id: string;
+  player2_discord_id: string | null;
+  ref_discord_id: string | null;
+
+  veilbreak: boolean;
+  base_game: boolean;
+  scadubingo: boolean;
+
+  status: string;
+
+  created_at: string;
+  finished_at: string | null;
 };
