@@ -1,11 +1,17 @@
-import { ChatInputCommandInteraction, Client } from "discord.js";
+import {
+  ChatInputCommandInteraction,
+  Client,
+  ChannelType,
+} from "discord.js";
 import { buildTypeButtons } from "../ui/setupComponents";
 import {
   closeTicket,
+  createTicket,
   findActiveTicketForUser,
   getOpenMatchTickets,
   getRecentMatches,
   leaveAcceptedTicket,
+  updateTicketMessageId,
   userHasActiveTicketOrAcceptance,
 } from "../services/ticketService";
 import { getTicketJumpUrl, refreshTicketMessage } from "../utils/ticketMessage";
@@ -13,6 +19,12 @@ import {
   handleForceCloseCommand,
   handleRemovePlayerCommand,
 } from "./adminHandlers";
+import { config } from "../config";
+import {
+  buildTicketButtons,
+  buildTicketEmbed,
+} from "../ui/ticketRenderer";
+
 
 function getMatchModeNames(match: {
   veilbreak: boolean;
@@ -108,10 +120,101 @@ function formatRecentMatchLine(match: {
   );
 }
 
+type QuickMode = "veilbreak" | "base_game" | "scadubingo";
+
+function getQuickModeLabel(mode: QuickMode): string {
+  if (mode === "veilbreak") return "Veilbreak";
+  if (mode === "base_game") return "Base Game";
+  if (mode === "scadubingo") return "Scadubingo";
+  return mode;
+}
+
+async function createQuickCasualTicket(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+  mode: QuickMode
+) {
+  const alreadyActive = await userHasActiveTicketOrAcceptance(interaction.user.id);
+
+  if (alreadyActive) {
+    await interaction.reply({
+      content:
+        "You already have an active matchmaking ticket, or you accepted a ticket that is still active.\n" +
+        "Finish, cancel, leave, or mark that ticket as wasn't played before creating another one.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const channel = await client.channels.fetch(config.matchmakingChannelId);
+
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    await interaction.reply({
+      content: "The matchmaking channel is invalid or not a text channel.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const modeLabel = getQuickModeLabel(mode);
+
+  const ticket = await createTicket({
+    guildId: config.guildId,
+    channelId: config.matchmakingChannelId,
+    creatorDiscordId: interaction.user.id,
+    matchmakingType: "casual",
+    hostIsPlayer: true,
+    modes: [mode],
+    searchMinutes: 60,
+    scheduledAt: null,
+    scheduledTimezone: null,
+    matchTitle: `${modeLabel} Casual Match`,
+    matchDetails: null,
+  });
+
+  if (!ticket) {
+    await interaction.reply({
+      content: "Failed to create matchmaking ticket.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const sentMessage = await channel.send({
+    embeds: [buildTicketEmbed(ticket, [])],
+    components: buildTicketButtons(ticket),
+  });
+
+  await updateTicketMessageId(ticket.id, sentMessage.id);
+
+  await interaction.reply({
+    content:
+      `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${config.matchmakingChannelId}>.`,
+    ephemeral: true,
+  });
+}
+
 export async function handleChatInputCommand(
   client: Client,
   interaction: ChatInputCommandInteraction
 ) {
+
+  if (interaction.commandName === "veilbreak") {
+    await createQuickCasualTicket(client, interaction, "veilbreak");
+    return;
+  }
+
+  if (interaction.commandName === "basegame") {
+    await createQuickCasualTicket(client, interaction, "base_game");
+    return;
+  }
+
+  if (interaction.commandName === "scadubingo") {
+    await createQuickCasualTicket(client, interaction, "scadubingo");
+    return;
+  }
+
+
   if (interaction.commandName === "creatematch") {
     const alreadyActive = await userHasActiveTicketOrAcceptance(interaction.user.id);
 
