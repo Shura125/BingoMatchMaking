@@ -405,8 +405,14 @@ export async function handleCreateTicket(
   }
 
   const sentMessage = await channel.send({
+    content: config.bingoPlayersRoleId
+      ? `<@&${config.bingoPlayersRoleId}>`
+      : undefined,
     embeds: [buildTicketEmbed(ticket, [])],
     components: buildTicketButtons(ticket),
+    allowedMentions: {
+      roles: config.bingoPlayersRoleId ? [config.bingoPlayersRoleId] : [],
+    },
   });
 
   await updateTicketMessageId(ticket.id, sentMessage.id);
