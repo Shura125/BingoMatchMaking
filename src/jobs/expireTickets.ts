@@ -1,27 +1,33 @@
 import { Client } from "discord.js";
 import {
+  closeTicket,
   expireTicket,
   getExpiredOpenTickets,
+  getStartedTicketsPastLimit,
 } from "../services/ticketService";
 import { refreshTicketMessage } from "../utils/ticketMessage";
-import { deleteTicketMessage } from "../utils/ticketCleanup";
 
 const ONE_MINUTE = 60_000;
-const DELETE_EXPIRED_AFTER_MS = 5 * 60 * 1000;
+const AUTO_FINISH_HOURS = 2;
 
 export function startExpireTicketsJob(client: Client) {
   setInterval(() => {
-    expireTickets(client).catch((error) => {
-      console.error("Expire tickets job failed:", error);
+    runTicketCleanupJob(client).catch((error) => {
+      console.error("Ticket cleanup job failed:", error);
     });
   }, ONE_MINUTE);
 
-  expireTickets(client).catch((error) => {
-    console.error("Initial expire tickets job failed:", error);
+  runTicketCleanupJob(client).catch((error) => {
+    console.error("Initial ticket cleanup job failed:", error);
   });
 }
 
-async function expireTickets(client: Client) {
+async function runTicketCleanupJob(client: Client) {
+  await expireOpenTickets(client);
+  await autoFinishStartedTickets(client);
+}
+
+async function expireOpenTickets(client: Client) {
   const expiredTickets = await getExpiredOpenTickets();
 
   for (const ticket of expiredTickets) {
@@ -32,11 +38,21 @@ async function expireTickets(client: Client) {
     }
 
     await refreshTicketMessage(client, ticket.id);
-
-    setTimeout(async () => {
-      await deleteTicketMessage(client, ticket);
-    }, DELETE_EXPIRED_AFTER_MS);
-
     console.log(`Expired ticket ${ticket.id}`);
+  }
+}
+
+async function autoFinishStartedTickets(client: Client) {
+  const startedTickets = await getStartedTicketsPastLimit(AUTO_FINISH_HOURS);
+
+  for (const ticket of startedTickets) {
+    const success = await closeTicket(ticket, "finished");
+
+    if (!success) {
+      continue;
+    }
+
+    await refreshTicketMessage(client, ticket.id);
+    console.log(`Auto-finished ticket ${ticket.id} after ${AUTO_FINISH_HOURS} hours`);
   }
 }

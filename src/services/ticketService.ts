@@ -468,6 +468,26 @@ export async function leaveAcceptedTicket(discordId: string): Promise<{
   };
 }
 
+export async function getStartedTicketsPastLimit(
+  hours = 2
+): Promise<MatchTicket[]> {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("match_tickets")
+    .select("*")
+    .eq("status", "started")
+    .not("started_at", "is", null)
+    .lte("started_at", cutoff);
+
+  if (error) {
+    console.error("Failed to get started tickets past limit:", error);
+    return [];
+  }
+
+  return data as MatchTicket[];
+}
+
 export async function getExpiredOpenTickets(): Promise<MatchTicket[]> {
   const { data, error } = await supabase
     .from("match_tickets")
