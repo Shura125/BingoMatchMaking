@@ -61,7 +61,7 @@ export async function userHasActiveCasualTicketOrAcceptance(
     .select("id")
     .eq("creator_discord_id", discordId)
     .eq("matchmaking_type", "casual")
-    .in("status", activeStatuses)
+    .eq("status", "open")
     .limit(1);
 
   if (ownedError) {
