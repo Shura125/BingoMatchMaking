@@ -53,6 +53,51 @@ export async function userHasActiveTicketOrAcceptance(
   return !!acceptedTickets && acceptedTickets.length > 0;
 }
 
+export async function userHasActiveCasualTicketOrAcceptance(
+  discordId: string
+): Promise<boolean> {
+  const { data: ownedTickets, error: ownedError } = await supabase
+    .from("match_tickets")
+    .select("id")
+    .eq("creator_discord_id", discordId)
+    .eq("matchmaking_type", "casual")
+    .in("status", activeStatuses)
+    .limit(1);
+
+  if (ownedError) {
+    console.error("Failed to check owned casual tickets:", ownedError);
+    return true;
+  }
+
+  if (ownedTickets && ownedTickets.length > 0) {
+    return true;
+  }
+
+  const { data: acceptedTickets, error: acceptedError } = await supabase
+    .from("match_ticket_acceptances")
+    .select(
+      `
+      id,
+      match_tickets!inner (
+        id,
+        status,
+        matchmaking_type
+      )
+    `
+    )
+    .eq("discord_id", discordId)
+    .eq("match_tickets.matchmaking_type", "casual")
+    .in("match_tickets.status", activeStatuses)
+    .limit(1);
+
+  if (acceptedError) {
+    console.error("Failed to check accepted casual tickets:", acceptedError);
+    return true;
+  }
+
+  return !!acceptedTickets && acceptedTickets.length > 0;
+}
+
 export async function fetchTicket(ticketId: string): Promise<MatchTicket | null> {
   const { data, error } = await supabase
     .from("match_tickets")

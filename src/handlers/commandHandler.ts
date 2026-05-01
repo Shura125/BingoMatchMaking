@@ -16,7 +16,7 @@ import {
   getRecentMatches,
   leaveAcceptedTicket,
   updateTicketMessageId,
-  userHasActiveTicketOrAcceptance,
+  userHasActiveCasualTicketOrAcceptance,
 } from "../services/ticketService";
 import { getTicketJumpUrl, refreshTicketMessage } from "../utils/ticketMessage";
 import {
@@ -174,11 +174,8 @@ function scheduleTicketExpiration(options: {
       if (!ticket) return;
       if (ticket.id !== ticketId) return;
 
-      // Only expire tickets that are still open.
-      // If the match was started, do not auto-close it.
       if (ticket.status !== "open") return;
 
-      
       const success = await closeTicket(ticket, "cancelled");
 
       if (!success) {
@@ -218,15 +215,15 @@ async function createQuickCasualTicket(
   interaction: ChatInputCommandInteraction,
   mode: QuickMode
 ) {
-  const alreadyActive = await userHasActiveTicketOrAcceptance(
+  const alreadyActive = await userHasActiveCasualTicketOrAcceptance(
     interaction.user.id
   );
 
   if (alreadyActive) {
     await interaction.reply({
       content:
-        "You already have an active matchmaking ticket, or you accepted a ticket that is still active.\n" +
-        "Finish, cancel, leave, or mark that ticket as wasn't played before creating another one.",
+        "You already have an active casual matchmaking ticket, or you accepted a casual ticket that is still active.\n" +
+        "Finish, cancel, leave, or mark that casual ticket as wasn't played before creating another casual one.",
       ephemeral: true,
     });
     return;
@@ -313,19 +310,6 @@ export async function handleChatInputCommand(
   }
 
   if (interaction.commandName === "creatematch") {
-    const alreadyActive = await userHasActiveTicketOrAcceptance(
-      interaction.user.id
-    );
-
-    if (alreadyActive) {
-      await interaction.reply({
-        content:
-          "You already have an active matchmaking ticket, or you accepted a ticket that is still active. Finish, cancel, leave, or mark that ticket as wasn't played before creating another one.",
-        ephemeral: true,
-      });
-      return;
-    }
-
     await interaction.reply({
       content: "Choose the type of matchmaking ticket you want to create.",
       components: [buildTypeButtons()],

@@ -14,7 +14,7 @@ import {
   getAcceptances,
   leaveSpecificTicket,
   startTicketGame,
-  userHasActiveTicketOrAcceptance,
+  userHasActiveCasualTicketOrAcceptance,
 } from "../services/ticketService";
 import {
   getPlayerAcceptances,
@@ -69,17 +69,19 @@ export async function handleAcceptTicket(
     return;
   }
 
-  const alreadyActiveElsewhere = await userHasActiveTicketOrAcceptance(
-    interaction.user.id
-  );
+  if (ticket.matchmaking_type === "casual") {
+    const alreadyActiveCasual = await userHasActiveCasualTicketOrAcceptance(
+      interaction.user.id
+    );
 
-  if (alreadyActiveElsewhere) {
-    await interaction.reply({
-      content:
-        "You already have an active matchmaking ticket, or you accepted another ticket that is still active.",
-      ephemeral: true,
-    });
-    return;
+    if (alreadyActiveCasual) {
+      await interaction.reply({
+        content:
+          "You already have an active casual matchmaking ticket, or you accepted another casual ticket that is still active.",
+        ephemeral: true,
+      });
+      return;
+    }
   }
 
   const existingAcceptances = await getAcceptances(ticketId);
