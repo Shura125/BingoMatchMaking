@@ -4,8 +4,10 @@ import {
   getExpiredOpenTickets,
 } from "../services/ticketService";
 import { refreshTicketMessage } from "../utils/ticketMessage";
+import { deleteTicketMessage } from "../utils/ticketCleanup";
 
 const ONE_MINUTE = 60_000;
+const DELETE_EXPIRED_AFTER_MS = 5 * 60 * 1000;
 
 export function startExpireTicketsJob(client: Client) {
   setInterval(() => {
@@ -30,6 +32,10 @@ async function expireTickets(client: Client) {
     }
 
     await refreshTicketMessage(client, ticket.id);
+
+    setTimeout(async () => {
+      await deleteTicketMessage(client, ticket);
+    }, DELETE_EXPIRED_AFTER_MS);
 
     console.log(`Expired ticket ${ticket.id}`);
   }
