@@ -83,11 +83,11 @@ export async function userHasActiveCasualTicketOrAcceptance(
         status,
         matchmaking_type
       )
-    `
+      `
     )
     .eq("discord_id", discordId)
     .eq("match_tickets.matchmaking_type", "casual")
-    .in("match_tickets.status", activeStatuses)
+    .eq("match_tickets.status", "open")
     .limit(1);
 
   if (acceptedError) {
