@@ -442,7 +442,8 @@ export async function handleChatInputCommand(
 
     await interaction.reply({
       content: `## Recent Matches\n\n${description}`,
-      ephemeral: false,
+      ephemeral: true,
+      allowedMentions: { parse: [] },
     });
 
     return;
@@ -450,7 +451,7 @@ export async function handleChatInputCommand(
 
   if (interaction.commandName === "openmatches") {
     const tickets = await getOpenMatchTickets();
-
+    
     if (tickets.length === 0) {
       await interaction.reply({
         content: "There are no open or started matchmaking tickets right now.",
@@ -458,17 +459,18 @@ export async function handleChatInputCommand(
       });
       return;
     }
-
+  
     const description = tickets
       .slice(0, 10)
       .map((ticket, index) => `${index + 1}. ${formatOpenTicketLine(ticket)}`)
       .join("\n\n");
-
+  
     await interaction.reply({
       content: `## Open Matches\n\n${description}`,
-      ephemeral: false,
+      ephemeral: true,
+      allowedMentions: { parse: [] },
     });
-
+  
     return;
   }
 }
