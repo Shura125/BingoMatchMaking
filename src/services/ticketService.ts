@@ -504,6 +504,24 @@ export async function getExpiredOpenTickets(): Promise<MatchTicket[]> {
   return data as MatchTicket[];
 }
 
+export async function getExpiredTicketsReadyToDelete(): Promise<MatchTicket[]> {
+  const deleteBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("match_tickets")
+    .select("*")
+    .eq("status", "expired")
+    .not("message_id", "is", null)
+    .lte("updated_at", deleteBefore);
+
+  if (error) {
+    console.error("Failed to get expired tickets ready to delete:", error);
+    return [];
+  }
+
+  return data as MatchTicket[];
+}
+
 export async function expireTicket(ticketId: string): Promise<boolean> {
   const { error } = await supabase
     .from("match_tickets")
