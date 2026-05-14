@@ -47,6 +47,13 @@ const commands = [
     .setDescription("Create a casual Scadubingo matchmaking ticket searching for 1 hour.")
     .toJSON(),
 
+  new SlashCommandBuilder()
+    .setName("legacydungeons")
+    .setDescription(
+      "Create a casual Legacy Dungeons matchmaking ticket searching for 1 hour."
+    )
+    .toJSON(),
+
     new SlashCommandBuilder()
   .setName("forceclose")
   .setDescription("Admin: force close a matchmaking ticket.")

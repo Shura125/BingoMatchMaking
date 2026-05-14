@@ -170,6 +170,7 @@ export async function createTicket(input: {
       veilbreak: input.modes.includes("veilbreak"),
       base_game: input.modes.includes("base_game"),
       scadubingo: input.modes.includes("scadubingo"),
+      legacy_dungeons: input.modes.includes("legacy_dungeons"),
 
       search_minutes: isCasualSearchNow ? input.searchMinutes : null,
       expires_at: expiresAt,
@@ -307,6 +308,7 @@ export async function closeTicket(
       veilbreak: ticket.veilbreak,
       base_game: ticket.base_game,
       scadubingo: ticket.scadubingo,
+      legacy_dungeons: ticket.legacy_dungeons,
 
       status: "finished",
       finished_at: new Date().toISOString(),

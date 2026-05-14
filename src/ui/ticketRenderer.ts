@@ -32,6 +32,7 @@ export function getSessionModeNames(modes: string[] | undefined): string {
     veilbreak: "Veilbreak",
     base_game: "Base Game",
     scadubingo: "Scadubingo",
+    legacy_dungeons: "Legacy Dungeons",
   };
 
   return modes.map((mode) => names[mode] ?? mode).join(", ");
@@ -43,6 +44,7 @@ function getModeNames(ticket: MatchTicket): string {
   if (ticket.veilbreak) modes.push("Veilbreak");
   if (ticket.base_game) modes.push("Base Game");
   if (ticket.scadubingo) modes.push("Scadubingo");
+  if (ticket.legacy_dungeons) modes.push("Legacy Dungeons");
 
   return modes.length > 0 ? modes.join(", ") : "None";
 }

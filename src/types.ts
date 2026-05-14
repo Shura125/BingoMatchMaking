@@ -42,6 +42,7 @@ export type MatchTicket = {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
+  legacy_dungeons: boolean;
 
   search_minutes: number | null;
   expires_at: string | null;
@@ -79,6 +80,7 @@ export type MatchRecord = {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
+  legacy_dungeons: boolean;
 
   status: string;
 

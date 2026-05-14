@@ -1,6 +1,6 @@
 import { MatchTicket, MatchTicketAcceptance } from "../types";
 
-export type StartMode = "veilbreak" | "base_game" | "scadubingo";
+export type StartMode = "veilbreak" | "base_game" | "scadubingo" | "legacy_dungeons";
 
 export type StartModeOption = {
   mode: StartMode;
@@ -59,6 +59,7 @@ export function getStartModeLabel(startedMode: string | null): string {
   if (startedMode === "veilbreak") return "Veilbreak";
   if (startedMode === "base_game") return "Base Game";
   if (startedMode === "scadubingo") return "Scadubingo";
+  if (startedMode === "legacy_dungeons") return "Legacy Dungeons";
   return "Not started";
 }
 
@@ -85,6 +86,13 @@ export function getStartModeOptionsForTicket(
     });
   }
 
+  if (ticket.legacy_dungeons) {
+    oneVOneOptions.push({
+      mode: "legacy_dungeons",
+      label: "Legacy Dungeons",
+    });
+  }
+
   // Competitive stays strict.
   if (ticket.matchmaking_type === "competitive") {
     const requiredAcceptedPlayers = getRequiredAcceptedPlayers(ticket);
@@ -92,10 +100,12 @@ export function getStartModeOptionsForTicket(
     const competitiveMode: StartMode | null = ticket.veilbreak
       ? "veilbreak"
       : ticket.base_game
-        ? "base_game"
-        : ticket.scadubingo
-          ? "scadubingo"
-          : null;
+      ? "base_game"
+      : ticket.scadubingo
+      ? "scadubingo"
+      : ticket.legacy_dungeons
+      ? "legacy_dungeons"
+      : null;
 
     return {
       canStart: acceptedCount === requiredAcceptedPlayers,

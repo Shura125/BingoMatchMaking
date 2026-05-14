@@ -34,12 +34,14 @@ function getMatchModeNames(match: {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
+  legacy_dungeons: boolean;
 }): string {
   const modes: string[] = [];
 
   if (match.veilbreak) modes.push("Veilbreak");
   if (match.base_game) modes.push("Base Game");
   if (match.scadubingo) modes.push("Scadubingo");
+  if (match.legacy_dungeons) modes.push("Legacy Dungeons");
 
   return modes.length > 0 ? modes.join(", ") : "Unknown";
 }
@@ -48,12 +50,14 @@ function getTicketModeNames(ticket: {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
+  legacy_dungeons: boolean;
 }): string {
   const modes: string[] = [];
 
   if (ticket.veilbreak) modes.push("Veilbreak");
   if (ticket.base_game) modes.push("Base Game");
   if (ticket.scadubingo) modes.push("Scadubingo");
+  if (ticket.legacy_dungeons) modes.push("Legacy Dungeons");
 
   return modes.length > 0 ? modes.join(", ") : "Unknown";
 }
@@ -78,6 +82,7 @@ function formatOpenTicketLine(ticket: {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
+  legacy_dungeons: boolean;
   created_at: string;
 }): string {
   const ticketUrl = getTicketJumpUrlFromParts(ticket);
@@ -102,6 +107,7 @@ function formatRecentMatchLine(match: {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
+  legacy_dungeons: boolean;
   finished_at: string | null;
 }): string {
   const player2 = match.player2_discord_id
@@ -200,12 +206,13 @@ function scheduleTicketExpiration(options: {
   }, searchMinutes * 60 * 1000);
 }
 
-type QuickMode = "veilbreak" | "base_game" | "scadubingo";
+type QuickMode = "veilbreak" | "base_game" | "scadubingo" | "legacy_dungeons";
 
 function getQuickModeLabel(mode: QuickMode): string {
   if (mode === "veilbreak") return "Veilbreak";
   if (mode === "base_game") return "Base Game";
   if (mode === "scadubingo") return "Scadubingo";
+  if (mode === "legacy_dungeons") return "Legacy Dungeons";
 
   return mode;
 }
@@ -306,6 +313,11 @@ export async function handleChatInputCommand(
 
   if (interaction.commandName === "scadubingo") {
     await createQuickCasualTicket(client, interaction, "scadubingo");
+    return;
+  }
+
+  if (interaction.commandName === "legacydungeons") {
+    await createQuickCasualTicket(client, interaction, "legacy_dungeons");
     return;
   }
 

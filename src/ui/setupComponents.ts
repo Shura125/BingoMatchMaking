@@ -42,7 +42,7 @@ export function buildModeSelect() {
       .setCustomId("mm_modes")
       .setPlaceholder("Choose one or more game modes")
       .setMinValues(1)
-      .setMaxValues(3)
+      .setMaxValues(4)
       .addOptions(
         {
           label: "Veilbreak",
@@ -58,6 +58,11 @@ export function buildModeSelect() {
           label: "Scadubingo",
           value: "scadubingo",
           description: "Search for a Scadubingo match.",
+        },
+        {
+          label: "Legacy Dungeons",
+          value: "legacy_dungeons",
+          description: "Search for a Legacy Dungeons match.",
         }
       )
   );
