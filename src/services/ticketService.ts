@@ -15,7 +15,7 @@ export async function userHasActiveTicketOrAcceptance(
   discordId: string
 ): Promise<boolean> {
   const { data: ownedTickets, error: ownedError } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("id")
     .eq("creator_discord_id", discordId)
     .in("status", activeStatuses)
@@ -31,18 +31,18 @@ export async function userHasActiveTicketOrAcceptance(
   }
 
   const { data: acceptedTickets, error: acceptedError } = await supabase
-    .from("match_ticket_acceptances")
+    .from("bot_match_ticket_acceptances")
     .select(
       `
       id,
-      match_tickets!inner (
+      bot_match_tickets!inner (
         id,
         status
       )
     `
     )
     .eq("discord_id", discordId)
-    .in("match_tickets.status", activeStatuses)
+    .in("bot_match_tickets.status", activeStatuses)
     .limit(1);
 
   if (acceptedError) {
@@ -57,7 +57,7 @@ export async function userHasActiveCasualTicketOrAcceptance(
   discordId: string
 ): Promise<boolean> {
   const { data: ownedTickets, error: ownedError } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("id")
     .eq("creator_discord_id", discordId)
     .eq("matchmaking_type", "casual")
@@ -74,11 +74,11 @@ export async function userHasActiveCasualTicketOrAcceptance(
   }
 
   const { data: acceptedTickets, error: acceptedError } = await supabase
-    .from("match_ticket_acceptances")
+    .from("bot_match_ticket_acceptances")
     .select(
       `
       id,
-      match_tickets!inner (
+      bot_match_tickets!inner (
         id,
         status,
         matchmaking_type
@@ -86,8 +86,8 @@ export async function userHasActiveCasualTicketOrAcceptance(
       `
     )
     .eq("discord_id", discordId)
-    .eq("match_tickets.matchmaking_type", "casual")
-    .eq("match_tickets.status", "open")
+    .eq("bot_match_tickets.matchmaking_type", "casual")
+    .eq("bot_match_tickets.status", "open")
     .limit(1);
 
   if (acceptedError) {
@@ -100,7 +100,7 @@ export async function userHasActiveCasualTicketOrAcceptance(
 
 export async function fetchTicket(ticketId: string): Promise<MatchTicket | null> {
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .eq("id", ticketId)
     .single();
@@ -117,7 +117,7 @@ export async function getAcceptances(
   ticketId: string
 ): Promise<MatchTicketAcceptance[]> {
   const { data, error } = await supabase
-    .from("match_ticket_acceptances")
+    .from("bot_match_ticket_acceptances")
     .select("*")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
@@ -152,7 +152,7 @@ export async function createTicket(input: {
       : null;
 
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .insert({
       guild_id: input.guildId,
       channel_id: input.channelId,
@@ -190,7 +190,7 @@ export async function createTicket(input: {
 
 export async function updateTicketMessageId(ticketId: string, messageId: string) {
   const { error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .update({
       message_id: messageId,
       updated_at: new Date().toISOString(),
@@ -207,7 +207,7 @@ export async function addAcceptance(input: {
   discordId: string;
   acceptanceType: AcceptanceType;
 }): Promise<boolean> {
-  const { error } = await supabase.from("match_ticket_acceptances").insert({
+  const { error } = await supabase.from("bot_match_ticket_acceptances").insert({
     ticket_id: input.ticketId,
     discord_id: input.discordId,
     acceptance_type: input.acceptanceType,
@@ -226,7 +226,7 @@ export async function startTicketGame(
   startedMode: string
 ): Promise<boolean> {
   const { error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .update({
       status: "started",
       started_mode: startedMode,
@@ -251,7 +251,7 @@ export async function closeTicket(
   newStatus: "finished" | "wasnt_played" | "cancelled"
 ): Promise<boolean> {
   const { error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .update({
       status: newStatus,
       updated_at: new Date().toISOString(),
@@ -293,7 +293,7 @@ export async function closeTicket(
   }
 
   const { data: matchData, error: matchError } = await supabase
-    .from("matches")
+    .from("bot_matches")
     .insert({
       ticket_id: ticket.id,
       guild_id: ticket.guild_id,
@@ -340,7 +340,7 @@ export async function closeTicket(
   ];
 
   const { error: participantError } = await supabase
-    .from("match_participants")
+    .from("bot_match_participants")
     .insert(participantRows);
 
   if (participantError) {
@@ -357,7 +357,7 @@ export async function findActiveOwnedTicket(
   discordId: string
 ): Promise<MatchTicket | null> {
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .eq("creator_discord_id", discordId)
     .in("status", activeStatuses)
@@ -377,7 +377,7 @@ export async function findActiveAcceptedTicket(
   discordId: string
 ): Promise<MatchTicket | null> {
   const { data: acceptances, error: acceptanceError } = await supabase
-    .from("match_ticket_acceptances")
+    .from("bot_match_ticket_acceptances")
     .select("ticket_id")
     .eq("discord_id", discordId);
 
@@ -393,7 +393,7 @@ export async function findActiveAcceptedTicket(
   }
 
   const { data: ticket, error: ticketError } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .in("id", ticketIds)
     .in("status", activeStatuses)
@@ -451,7 +451,7 @@ export async function leaveAcceptedTicket(discordId: string): Promise<{
   }
 
   const { error } = await supabase
-    .from("match_ticket_acceptances")
+    .from("bot_match_ticket_acceptances")
     .delete()
     .eq("ticket_id", ticket.id)
     .eq("discord_id", discordId);
@@ -476,7 +476,7 @@ export async function getStartedTicketsPastLimit(
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .eq("status", "started")
     .not("started_at", "is", null)
@@ -492,7 +492,7 @@ export async function getStartedTicketsPastLimit(
 
 export async function getExpiredOpenTickets(): Promise<MatchTicket[]> {
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .eq("status", "open")
     .not("expires_at", "is", null)
@@ -510,7 +510,7 @@ export async function getExpiredTicketsReadyToDelete(): Promise<MatchTicket[]> {
   const deleteBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .eq("status", "expired")
     .not("message_id", "is", null)
@@ -526,7 +526,7 @@ export async function getExpiredTicketsReadyToDelete(): Promise<MatchTicket[]> {
 
 export async function expireTicket(ticketId: string): Promise<boolean> {
   const { error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .update({
       status: "expired",
       updated_at: new Date().toISOString(),
@@ -547,7 +547,7 @@ export async function leaveSpecificTicket(
   discordId: string
 ): Promise<boolean> {
   const { error } = await supabase
-    .from("match_ticket_acceptances")
+    .from("bot_match_ticket_acceptances")
     .delete()
     .eq("ticket_id", ticketId)
     .eq("discord_id", discordId);
@@ -562,7 +562,7 @@ export async function leaveSpecificTicket(
 
 export async function getRecentMatches(limit = 10): Promise<MatchRecord[]> {
   const { data, error } = await supabase
-    .from("matches")
+    .from("bot_matches")
     .select("*")
     .eq("status", "finished")
     .order("finished_at", { ascending: false })
@@ -581,7 +581,7 @@ export async function forceSetTicketStatus(
   status: "finished" | "wasnt_played" | "cancelled" | "expired"
 ): Promise<boolean> {
   const { error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .update({
       status,
       updated_at: new Date().toISOString(),
@@ -598,7 +598,7 @@ export async function forceSetTicketStatus(
 
 export async function getOpenMatchTickets(): Promise<MatchTicket[]> {
   const { data, error } = await supabase
-    .from("match_tickets")
+    .from("bot_match_tickets")
     .select("*")
     .in("status", ["open", "started"])
     .order("created_at", { ascending: false });
