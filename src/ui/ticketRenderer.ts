@@ -33,6 +33,8 @@ export function getSessionModeNames(modes: string[] | undefined): string {
     base_game: "Base Game",
     scadubingo: "Scadubingo",
     legacy_dungeons: "Legacy Dungeons",
+    cluedo: "Cluedo",
+    battleship: "Battleship",
   };
 
   return modes.map((mode) => names[mode] ?? mode).join(", ");
@@ -45,12 +47,30 @@ function getModeNames(ticket: MatchTicket): string {
   if (ticket.base_game) modes.push("Base Game");
   if (ticket.scadubingo) modes.push("Scadubingo");
   if (ticket.legacy_dungeons) modes.push("Legacy Dungeons");
+  if (ticket.cluedo) modes.push("Cluedo");
+  if (ticket.battleship) modes.push("Battleship");
 
   return modes.length > 0 ? modes.join(", ") : "None";
 }
 
 function getStatusLabel(status: string): string {
   return status.replace("_", " ").toUpperCase();
+}
+
+function getGameInfoText(ticket: MatchTicket): string {
+  if (!ticket.lobby_code || !ticket.game_seed) {
+    return "Game has not started yet.";
+  }
+
+  if (ticket.started_mode === "battleship") {
+    return (
+      "Battleship Website: " +
+      "[Battleship Website](https://kcbrazos.github.io/Elden-Battleship/#/)\n" +
+      `Game Seed: **${ticket.game_seed}**`
+    );
+  }
+
+  return `Lobby Code: **${ticket.lobby_code}**\nGame Seed: **${ticket.game_seed}**`;
 }
 
 export function buildTicketEmbed(
@@ -166,10 +186,7 @@ export function buildTicketEmbed(
       },
       {
         name: "Game Info",
-        value:
-          ticket.lobby_code && ticket.game_seed
-            ? `Lobby Code: **${ticket.lobby_code}**\nGame Seed: **${ticket.game_seed}**`
-            : "Game has not started yet.",
+        value: getGameInfoText(ticket),
         inline: false,
       },
       {

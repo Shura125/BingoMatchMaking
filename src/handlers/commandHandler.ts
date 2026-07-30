@@ -35,6 +35,8 @@ function getMatchModeNames(match: {
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
+  cluedo: boolean;
+  battleship: boolean;
 }): string {
   const modes: string[] = [];
 
@@ -42,6 +44,8 @@ function getMatchModeNames(match: {
   if (match.base_game) modes.push("Base Game");
   if (match.scadubingo) modes.push("Scadubingo");
   if (match.legacy_dungeons) modes.push("Legacy Dungeons");
+  if (match.cluedo) modes.push("Cluedo");
+  if (match.battleship) modes.push("Battleship");
 
   return modes.length > 0 ? modes.join(", ") : "Unknown";
 }
@@ -51,6 +55,8 @@ function getTicketModeNames(ticket: {
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
+  cluedo: boolean;
+  battleship: boolean;
 }): string {
   const modes: string[] = [];
 
@@ -58,6 +64,8 @@ function getTicketModeNames(ticket: {
   if (ticket.base_game) modes.push("Base Game");
   if (ticket.scadubingo) modes.push("Scadubingo");
   if (ticket.legacy_dungeons) modes.push("Legacy Dungeons");
+  if (ticket.cluedo) modes.push("Cluedo");
+  if (ticket.battleship) modes.push("Battleship");
 
   return modes.length > 0 ? modes.join(", ") : "Unknown";
 }
@@ -83,6 +91,8 @@ function formatOpenTicketLine(ticket: {
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
+  cluedo: boolean;
+  battleship: boolean;
   created_at: string;
 }): string {
   const ticketUrl = getTicketJumpUrlFromParts(ticket);
@@ -108,6 +118,8 @@ function formatRecentMatchLine(match: {
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
+  cluedo: boolean;
+  battleship: boolean;
   finished_at: string | null;
 }): string {
   const player2 = match.player2_discord_id
@@ -206,15 +218,31 @@ function scheduleTicketExpiration(options: {
   }, searchMinutes * 60 * 1000);
 }
 
-type QuickMode = "veilbreak" | "base_game" | "scadubingo" | "legacy_dungeons";
+type QuickMode =
+  | "veilbreak"
+  | "base_game"
+  | "scadubingo"
+  | "legacy_dungeons"
+  | "cluedo"
+  | "battleship";
 
 function getQuickModeLabel(mode: QuickMode): string {
   if (mode === "veilbreak") return "Veilbreak";
   if (mode === "base_game") return "Base Game";
   if (mode === "scadubingo") return "Scadubingo";
   if (mode === "legacy_dungeons") return "Legacy Dungeons";
+  if (mode === "cluedo") return "Cluedo";
+  if (mode === "battleship") return "Battleship";
 
   return mode;
+}
+
+function getRoleIdForQuickMode(mode: QuickMode): string {
+  if (mode === "cluedo" || mode === "battleship") {
+    return config.casualGameModesRoleId;
+  }
+
+  return config.bingoPlayersRoleId;
 }
 
 async function createQuickCasualTicket(
@@ -247,6 +275,7 @@ async function createQuickCasualTicket(
   }
 
   const modeLabel = getQuickModeLabel(mode);
+  const roleId = getRoleIdForQuickMode(mode);
   const searchMinutes = 60;
 
   const ticket = await createTicket({
@@ -272,11 +301,11 @@ async function createQuickCasualTicket(
   }
 
   const sentMessage = await channel.send({
-    content: `<@&${config.bingoPlayersRoleId}>`,
+    content: `<@&${roleId}>`,
     embeds: [buildTicketEmbed(ticket, [])],
     components: buildTicketButtons(ticket),
     allowedMentions: {
-      roles: [config.bingoPlayersRoleId],
+      roles: [roleId],
     },
   });
 
@@ -318,6 +347,16 @@ export async function handleChatInputCommand(
 
   if (interaction.commandName === "legacydungeons") {
     await createQuickCasualTicket(client, interaction, "legacy_dungeons");
+    return;
+  }
+
+  if (interaction.commandName === "cluedo") {
+    await createQuickCasualTicket(client, interaction, "cluedo");
+    return;
+  }
+
+  if (interaction.commandName === "battleship") {
+    await createQuickCasualTicket(client, interaction, "battleship");
     return;
   }
 

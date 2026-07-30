@@ -18,6 +18,7 @@ export const config = {
   guildId: requireEnv("GUILD_ID"),
   matchmakingChannelId: requireEnv("MATCHMAKING_CHANNEL_ID"),
   bingoPlayersRoleId: requireEnv("BINGO_PLAYERS_ROLE_ID"),
+  casualGameModesRoleId: requireEnv("CASUAL_GAME_MODES_ROLE_ID"),
 
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseServiceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),

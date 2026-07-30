@@ -43,6 +43,8 @@ export type MatchTicket = {
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
+  cluedo: boolean;
+  battleship: boolean;
 
   search_minutes: number | null;
   expires_at: string | null;
@@ -81,6 +83,8 @@ export type MatchRecord = {
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
+  cluedo: boolean;
+  battleship: boolean;
 
   status: string;
 

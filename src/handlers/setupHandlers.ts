@@ -34,6 +34,14 @@ export const pendingSessions = new Map<string, PendingSession>();
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
+function getRoleIdForModes(modes: string[]): string {
+  if (modes.includes("cluedo") || modes.includes("battleship")) {
+    return config.casualGameModesRoleId;
+  }
+
+  return config.bingoPlayersRoleId;
+}
+
 export async function handleTypeButton(interaction: ButtonInteraction) {
   const matchmakingType: MatchmakingType =
     interaction.customId === "mm_type_competitive" ? "competitive" : "casual";
@@ -59,7 +67,7 @@ export async function handleTypeButton(interaction: ButtonInteraction) {
 
   await interaction.update({
     content: "Selected: **CASUAL**\n\nNow choose the game modes.",
-    components: [buildModeSelect()],
+    components: [buildModeSelect(true)],
   });
 }
 
@@ -76,7 +84,7 @@ export async function handleCompetitiveHostRoleButton(
       `Competitive host role: **${
         session.hostIsPlayer ? "Playing" : "Only Hosting"
       }**\n\nNow choose the game modes.`,
-    components: [buildModeSelect()],
+    components: [buildModeSelect(false)],
   });
 }
 
@@ -404,14 +412,14 @@ export async function handleCreateTicket(
     return;
   }
 
+  const roleId = getRoleIdForModes(session.modes);
+
   const sentMessage = await channel.send({
-    content: config.bingoPlayersRoleId
-      ? `<@&${config.bingoPlayersRoleId}>`
-      : undefined,
+    content: roleId ? `<@&${roleId}>` : undefined,
     embeds: [buildTicketEmbed(ticket, [])],
     components: buildTicketButtons(ticket),
     allowedMentions: {
-      roles: config.bingoPlayersRoleId ? [config.bingoPlayersRoleId] : [],
+      roles: roleId ? [roleId] : [],
     },
   });
 

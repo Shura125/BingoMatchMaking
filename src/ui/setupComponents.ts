@@ -36,35 +36,52 @@ export function buildCompetitiveHostRoleButtons() {
   );
 }
 
-export function buildModeSelect() {
+export function buildModeSelect(includeCasualGameModes = false) {
+  const options = [
+    {
+      label: "Veilbreak",
+      value: "veilbreak",
+      description: "Search for a Veilbreak match.",
+    },
+    {
+      label: "Base Game",
+      value: "base_game",
+      description: "Search for a Base Game match.",
+    },
+    {
+      label: "Scadubingo",
+      value: "scadubingo",
+      description: "Search for a Scadubingo match.",
+    },
+    {
+      label: "Legacy Dungeons",
+      value: "legacy_dungeons",
+      description: "Search for a Legacy Dungeons match.",
+    },
+  ];
+
+  if (includeCasualGameModes) {
+    options.push(
+      {
+        label: "Cluedo",
+        value: "cluedo",
+        description: "Search for a 6-player Cluedo match.",
+      },
+      {
+        label: "Battleship",
+        value: "battleship",
+        description: "Search for a 6-player Battleship match.",
+      }
+    );
+  }
+
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId("mm_modes")
       .setPlaceholder("Choose one or more game modes")
       .setMinValues(1)
-      .setMaxValues(4)
-      .addOptions(
-        {
-          label: "Veilbreak",
-          value: "veilbreak",
-          description: "Search for a Veilbreak match.",
-        },
-        {
-          label: "Base Game",
-          value: "base_game",
-          description: "Search for a Base Game match.",
-        },
-        {
-          label: "Scadubingo",
-          value: "scadubingo",
-          description: "Search for a Scadubingo match.",
-        },
-        {
-          label: "Legacy Dungeons",
-          value: "legacy_dungeons",
-          description: "Search for a Legacy Dungeons match.",
-        }
-      )
+      .setMaxValues(options.length)
+      .addOptions(...options)
   );
 }
 

@@ -171,6 +171,8 @@ export async function createTicket(input: {
       base_game: input.modes.includes("base_game"),
       scadubingo: input.modes.includes("scadubingo"),
       legacy_dungeons: input.modes.includes("legacy_dungeons"),
+      cluedo: input.modes.includes("cluedo"),
+      battleship: input.modes.includes("battleship"),
 
       search_minutes: isCasualSearchNow ? input.searchMinutes : null,
       expires_at: expiresAt,
@@ -309,6 +311,8 @@ export async function closeTicket(
       base_game: ticket.base_game,
       scadubingo: ticket.scadubingo,
       legacy_dungeons: ticket.legacy_dungeons,
+      cluedo: ticket.cluedo,
+      battleship: ticket.battleship,
 
       status: "finished",
       finished_at: new Date().toISOString(),

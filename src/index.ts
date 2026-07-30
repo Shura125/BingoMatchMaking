@@ -147,6 +147,36 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (interaction.customId.startsWith("ticket_start_as_legacy_dungeons_")) {
+        const ticketId = interaction.customId.replace(
+          "ticket_start_as_legacy_dungeons_",
+          ""
+        );
+
+        await handleStartGameAsMode(interaction, ticketId, "legacy_dungeons");
+        return;
+      }
+
+      if (interaction.customId.startsWith("ticket_start_as_cluedo_")) {
+        const ticketId = interaction.customId.replace(
+          "ticket_start_as_cluedo_",
+          ""
+        );
+
+        await handleStartGameAsMode(interaction, ticketId, "cluedo");
+        return;
+      }
+
+      if (interaction.customId.startsWith("ticket_start_as_battleship_")) {
+        const ticketId = interaction.customId.replace(
+          "ticket_start_as_battleship_",
+          ""
+        );
+
+        await handleStartGameAsMode(interaction, ticketId, "battleship");
+        return;
+      }
+
       if (interaction.customId.startsWith("ticket_start_")) {
         const ticketId = interaction.customId.replace("ticket_start_", "");
 

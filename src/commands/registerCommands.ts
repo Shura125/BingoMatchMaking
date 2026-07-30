@@ -54,6 +54,18 @@ const commands = [
     )
     .toJSON(),
 
+  new SlashCommandBuilder()
+    .setName("cluedo")
+    .setDescription("Create a casual Cluedo matchmaking ticket searching for 1 hour.")
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("battleship")
+    .setDescription(
+      "Create a casual Battleship matchmaking ticket searching for 1 hour."
+    )
+    .toJSON(),
+
     new SlashCommandBuilder()
   .setName("forceclose")
   .setDescription("Admin: force close a matchmaking ticket.")

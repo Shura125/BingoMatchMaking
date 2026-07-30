@@ -22,6 +22,7 @@ import {
   getRequiredAcceptedPlayers,
   getStartModeLabel,
   getStartModeOptionsForTicket,
+  StartMode,
 } from "../utils/playerLimits";
 import { buildTicketButtons, buildTicketEmbed } from "../ui/ticketRenderer";
 import { deleteTicketMessage } from "../utils/ticketCleanup";
@@ -36,6 +37,36 @@ async function renderTicketMessage(ticketId: string) {
     embeds: [buildTicketEmbed(ticket, acceptances)],
     components: buildTicketButtons(ticket),
   };
+}
+
+type Ticket = NonNullable<Awaited<ReturnType<typeof fetchTicket>>>;
+
+function ticketIncludesStartMode(ticket: Ticket, mode: StartMode): boolean {
+  if (mode === "veilbreak") return ticket.veilbreak;
+  if (mode === "base_game") return ticket.base_game;
+  if (mode === "scadubingo") return ticket.scadubingo;
+  if (mode === "legacy_dungeons") return ticket.legacy_dungeons;
+  if (mode === "cluedo") return ticket.cluedo;
+  if (mode === "battleship") return ticket.battleship;
+
+  return false;
+}
+
+function getRequiredAcceptedPlayersForStartMode(
+  ticket: Ticket,
+  mode: StartMode
+): number {
+  const hostPlayerCount = ticket.host_is_player ? 1 : 0;
+
+  if (mode === "cluedo" || mode === "battleship") {
+    return 6 - hostPlayerCount;
+  }
+
+  if (mode === "veilbreak") {
+    return 4 - hostPlayerCount;
+  }
+
+  return 2 - hostPlayerCount;
 }
 
 export async function handleAcceptTicket(
@@ -434,7 +465,7 @@ export async function handleLeaveQueueButton(
 export async function handleStartGameAsMode(
   interaction: ButtonInteraction,
   ticketId: string,
-  startedMode: "base_game" | "scadubingo"
+  startedMode: StartMode
 ) {
   const ticket = await fetchTicket(ticketId);
 
@@ -462,17 +493,11 @@ export async function handleStartGameAsMode(
     return;
   }
 
-  if (startedMode === "base_game" && !ticket.base_game) {
+  if (!ticketIncludesStartMode(ticket, startedMode)) {
     await interaction.reply({
-      content: "This ticket did not include Base Game as an option.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (startedMode === "scadubingo" && !ticket.scadubingo) {
-    await interaction.reply({
-      content: "This ticket did not include Scadubingo as an option.",
+      content: `This ticket did not include ${getStartModeLabel(
+        startedMode
+      )} as an option.`,
       ephemeral: true,
     });
     return;
@@ -480,10 +505,16 @@ export async function handleStartGameAsMode(
 
   const acceptances = await getAcceptances(ticketId);
   const playerAcceptances = getPlayerAcceptances(acceptances);
+  const requiredAcceptedPlayers = getRequiredAcceptedPlayersForStartMode(
+    ticket,
+    startedMode
+  );
 
-  if (playerAcceptances.length < 1) {
+  if (playerAcceptances.length < requiredAcceptedPlayers) {
     await interaction.reply({
-      content: "You need at least 1 accepted player to start as a 1v1 mode.",
+      content: `You need ${requiredAcceptedPlayers} accepted player${
+        requiredAcceptedPlayers === 1 ? "" : "s"
+      } to start as ${getStartModeLabel(startedMode)}.`,
       ephemeral: true,
     });
     return;
