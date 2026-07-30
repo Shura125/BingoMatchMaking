@@ -204,6 +204,23 @@ export async function updateTicketMessageId(ticketId: string, messageId: string)
   }
 }
 
+export async function clearTicketMessageId(ticketId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from("bot_match_tickets")
+    .update({
+      message_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", ticketId);
+
+  if (error) {
+    console.error("Failed to clear message_id:", error);
+    return false;
+  }
+
+  return true;
+}
+
 export async function addAcceptance(input: {
   ticketId: string;
   discordId: string;

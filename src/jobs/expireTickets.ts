@@ -5,6 +5,7 @@ import {
   getExpiredTicketsReadyToDelete,
   getStartedTicketsPastLimit,
   closeTicket,
+  clearTicketMessageId,
 } from "../services/ticketService";
 import { refreshTicketMessage } from "../utils/ticketMessage";
 import { deleteTicketMessage } from "../utils/ticketCleanup";
@@ -75,7 +76,20 @@ async function deleteExpiredTicketMessages(client: Client) {
   const ticketsToDelete = await getExpiredTicketsReadyToDelete();
 
   for (const ticket of ticketsToDelete) {
-    await deleteTicketMessage(client, ticket);
-    console.log(`Deleted expired ticket message ${ticket.id}`);
+    const deleted = await deleteTicketMessage(client, ticket);
+
+    if (!deleted) {
+      console.error(`Failed to delete expired ticket message ${ticket.id}`);
+      continue;
+    }
+
+    const cleared = await clearTicketMessageId(ticket.id);
+
+    if (!cleared) {
+      console.error(`Deleted message but failed to clear message_id ${ticket.id}`);
+      continue;
+    }
+
+    console.log(`Cleaned up expired ticket message ${ticket.id}`);
   }
 }
