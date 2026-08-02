@@ -62,12 +62,12 @@ function getGameInfoText(ticket: MatchTicket): string {
     return "Game has not started yet.";
   }
 
+  if (ticket.started_mode === "cluedo") {
+    return "[Elden Cluedo Website](https://kcbrazos.github.io/Elden-Cluedo/#/)";
+  }
+
   if (ticket.started_mode === "battleship") {
-    return (
-      "Battleship Website: " +
-      "[Battleship Website](https://kcbrazos.github.io/Elden-Battleship/#/)\n" +
-      `Game Seed: **${ticket.game_seed}**`
-    );
+    return "[Battleship Website](https://kcbrazos.github.io/Elden-Battleship/#/)";
   }
 
   return `Lobby Code: **${ticket.lobby_code}**\nGame Seed: **${ticket.game_seed}**`;
