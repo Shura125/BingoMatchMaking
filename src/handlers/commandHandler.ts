@@ -250,16 +250,19 @@ async function createQuickCasualTicket(
   interaction: ChatInputCommandInteraction,
   mode: QuickMode
 ) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ ephemeral: true });
+  }
+
   const alreadyActive = await userHasActiveCasualTicketOrAcceptance(
     interaction.user.id
   );
 
   if (alreadyActive) {
-    await interaction.reply({
+    await interaction.editReply({
       content:
         "You already have an active casual matchmaking ticket, or you accepted a casual ticket that is still active.\n" +
         "Finish, cancel, leave, or mark that casual ticket as wasn't played before creating another casual one.",
-      ephemeral: true,
     });
     return;
   }
@@ -267,9 +270,8 @@ async function createQuickCasualTicket(
   const channel = await client.channels.fetch(config.matchmakingChannelId);
 
   if (!channel || channel.type !== ChannelType.GuildText) {
-    await interaction.reply({
+    await interaction.editReply({
       content: "The matchmaking channel is invalid or not a text channel.",
-      ephemeral: true,
     });
     return;
   }
@@ -293,9 +295,8 @@ async function createQuickCasualTicket(
   });
 
   if (!ticket) {
-    await interaction.reply({
+    await interaction.editReply({
       content: "Failed to create matchmaking ticket.",
-      ephemeral: true,
     });
     return;
   }
@@ -320,9 +321,8 @@ async function createQuickCasualTicket(
     deleteAfterMs: 5 * 60 * 1000,
   });
 
-  await interaction.reply({
+  await interaction.editReply({
     content: `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${config.matchmakingChannelId}>.`,
-    ephemeral: true,
   });
 }
 
