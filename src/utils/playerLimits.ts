@@ -1,12 +1,13 @@
 import { MatchTicket, MatchTicketAcceptance } from "../types";
+import {
+  GameModeId,
+  getGameMode,
+  getGameModeLabel,
+  getRequiredAcceptedPlayersForMode,
+  getTicketModeIds,
+} from "../gameModes";
 
-export type StartMode =
-  | "veilbreak"
-  | "base_game"
-  | "scadubingo"
-  | "legacy_dungeons"
-  | "cluedo"
-  | "battleship";
+export type StartMode = GameModeId;
 
 export type StartModeOption = {
   mode: StartMode;
@@ -29,8 +30,13 @@ export function getRequiredAcceptedPlayers(ticket: MatchTicket): number {
 }
 
 export function getTotalRequiredPlayers(ticket: MatchTicket): number {
-  if (ticket.cluedo || ticket.battleship) return 6;
-  return ticket.veilbreak ? 4 : 2;
+  const selectedModes = getTicketModeIds(ticket)
+    .map((modeId) => getGameMode(modeId))
+    .filter((mode) => mode !== null);
+
+  if (selectedModes.length === 0) return 2;
+
+  return Math.max(...selectedModes.map((mode) => mode.totalPlayers));
 }
 
 export function getCurrentPlayerCount(
@@ -51,40 +57,22 @@ export function getPlayerAcceptances(
 }
 
 export function getPlayerRequirementText(ticket: MatchTicket): string {
-  if (ticket.cluedo || ticket.battleship) {
-    return ticket.host_is_player
-      ? "Cluedo and Battleship require exactly 6 total players: host + 5 accepted players."
-      : "Cluedo and Battleship require exactly 6 accepted players because the host is not playing.";
+  const totalRequiredPlayers = getTotalRequiredPlayers(ticket);
+  const acceptedPlayers = getRequiredAcceptedPlayers(ticket);
+
+  if (ticket.host_is_player) {
+    return `This ticket requires exactly ${totalRequiredPlayers} total players: host + ${acceptedPlayers} accepted player${
+      acceptedPlayers === 1 ? "" : "s"
+    }.`;
   }
 
-  if (ticket.veilbreak) {
-    return ticket.host_is_player
-      ? "Veilbreak requires exactly 4 total players: host + 3 accepted players."
-      : "Veilbreak requires exactly 4 accepted players because the host is not playing.";
-  }
-
-  return ticket.host_is_player
-    ? "This mode requires exactly 2 total players: host + 1 accepted player."
-    : "This mode requires exactly 2 accepted players because the host is not playing.";
+  return `This ticket requires exactly ${acceptedPlayers} accepted player${
+    acceptedPlayers === 1 ? "" : "s"
+  } because the host is not playing.`;
 }
 
 export function getStartModeLabel(startedMode: string | null): string {
-  if (startedMode === "veilbreak") return "Veilbreak";
-  if (startedMode === "base_game") return "Base Game";
-  if (startedMode === "scadubingo") return "Scadubingo";
-  if (startedMode === "legacy_dungeons") return "Legacy Dungeons";
-  if (startedMode === "cluedo") return "Cluedo";
-  if (startedMode === "battleship") return "Battleship";
-  return "Not started";
-}
-
-function getModeRequiredAcceptedPlayers(
-  ticket: MatchTicket,
-  totalRequiredPlayers: number
-): number {
-  const hostPlayerCount = ticket.host_is_player ? 1 : 0;
-
-  return totalRequiredPlayers - hostPlayerCount;
+  return getGameModeLabel(startedMode);
 }
 
 export function getStartModeOptionsForTicket(
@@ -94,46 +82,16 @@ export function getStartModeOptionsForTicket(
   const playerAcceptances = getPlayerAcceptances(acceptances);
   const acceptedCount = playerAcceptances.length;
 
-  const availableOptions: StartModeOption[] = [];
-
-  if (ticket.base_game) {
-    availableOptions.push({
-      mode: "base_game",
-      label: "Base Game",
-    });
-  }
-
-  if (ticket.scadubingo) {
-    availableOptions.push({
-      mode: "scadubingo",
-      label: "Scadubingo",
-    });
-  }
-
-  if (ticket.legacy_dungeons) {
-    availableOptions.push({
-      mode: "legacy_dungeons",
-      label: "Legacy Dungeons",
-    });
-  }
+  const selectedModeIds = getTicketModeIds(ticket);
+  const availableOptions = selectedModeIds.map((modeId) => ({
+    mode: modeId,
+    label: getGameModeLabel(modeId),
+  }));
 
   // Competitive stays strict.
   if (ticket.matchmaking_type === "competitive") {
     const requiredAcceptedPlayers = getRequiredAcceptedPlayers(ticket);
-
-    const competitiveMode: StartMode | null = ticket.veilbreak
-      ? "veilbreak"
-      : ticket.base_game
-      ? "base_game"
-      : ticket.scadubingo
-      ? "scadubingo"
-      : ticket.legacy_dungeons
-      ? "legacy_dungeons"
-      : ticket.cluedo
-      ? "cluedo"
-      : ticket.battleship
-      ? "battleship"
-      : null;
+    const competitiveMode = selectedModeIds[0] ?? null;
 
     return {
       canStart: acceptedCount === requiredAcceptedPlayers,
@@ -149,41 +107,10 @@ export function getStartModeOptionsForTicket(
     };
   }
 
-  const startableOptions: StartModeOption[] = [];
-
-  if (
-    ticket.veilbreak &&
-    acceptedCount >= getModeRequiredAcceptedPlayers(ticket, 4)
-  ) {
-    startableOptions.push({
-      mode: "veilbreak",
-      label: "Veilbreak",
-    });
-  }
-
-  if (acceptedCount >= getModeRequiredAcceptedPlayers(ticket, 2)) {
-    startableOptions.push(...availableOptions);
-  }
-
-  if (
-    ticket.cluedo &&
-    acceptedCount >= getModeRequiredAcceptedPlayers(ticket, 6)
-  ) {
-    startableOptions.push({
-      mode: "cluedo",
-      label: "Cluedo",
-    });
-  }
-
-  if (
-    ticket.battleship &&
-    acceptedCount >= getModeRequiredAcceptedPlayers(ticket, 6)
-  ) {
-    startableOptions.push({
-      mode: "battleship",
-      label: "Battleship",
-    });
-  }
+  const startableOptions = availableOptions.filter(
+    (option) =>
+      acceptedCount >= getRequiredAcceptedPlayersForMode(ticket, option.mode)
+  );
 
   if (startableOptions.length > 0) {
     return {
@@ -192,17 +119,9 @@ export function getStartModeOptionsForTicket(
         startableOptions.length === 1 ? startableOptions[0].mode : null,
       options: startableOptions,
       requiredAcceptedPlayers: Math.min(
-        ...startableOptions.map((option) => {
-          if (option.mode === "cluedo" || option.mode === "battleship") {
-            return getModeRequiredAcceptedPlayers(ticket, 6);
-          }
-
-          if (option.mode === "veilbreak") {
-            return getModeRequiredAcceptedPlayers(ticket, 4);
-          }
-
-          return getModeRequiredAcceptedPlayers(ticket, 2);
-        })
+        ...startableOptions.map((option) =>
+          getRequiredAcceptedPlayersForMode(ticket, option.mode)
+        )
       ),
       message:
         startableOptions.length === 1
@@ -211,31 +130,22 @@ export function getStartModeOptionsForTicket(
     };
   }
 
-  if (availableOptions.length > 0) {
-    return {
-      canStart: false,
-      autoStartMode: null,
-      options: [],
-      requiredAcceptedPlayers: getModeRequiredAcceptedPlayers(ticket, 2),
-      message: "This mode requires 1 accepted player before starting.",
-    };
-  }
-
-  if (ticket.veilbreak) {
-    return {
-      canStart: false,
-      autoStartMode: null,
-      options: [],
-      requiredAcceptedPlayers: getModeRequiredAcceptedPlayers(ticket, 4),
-      message: "Veilbreak requires 3 accepted players before starting.",
-    };
-  }
+  const nextRequiredAcceptedPlayers =
+    availableOptions.length > 0
+      ? Math.min(
+          ...availableOptions.map((option) =>
+            getRequiredAcceptedPlayersForMode(ticket, option.mode)
+          )
+        )
+      : getRequiredAcceptedPlayers(ticket);
 
   return {
     canStart: false,
     autoStartMode: null,
     options: [],
-    requiredAcceptedPlayers: getModeRequiredAcceptedPlayers(ticket, 6),
-    message: "Cluedo and Battleship require 5 accepted players before starting.",
+    requiredAcceptedPlayers: nextRequiredAcceptedPlayers,
+    message: `This ticket requires ${nextRequiredAcceptedPlayers} accepted player${
+      nextRequiredAcceptedPlayers === 1 ? "" : "s"
+    } before starting.`,
   };
 }

@@ -6,7 +6,8 @@ import {
   StringSelectMenuInteraction,
 } from "discord.js";
 import { config } from "../config";
-import { MatchmakingType, PendingSession } from "../types";
+import { modesIncludeCasualGameModes } from "../gameModes";
+import { MatchmakingCategory, MatchmakingType, PendingSession } from "../types";
 import {
   buildCasualTimingButtons,
   buildCompetitiveHostRoleButtons,
@@ -35,19 +36,34 @@ export const pendingSessions = new Map<string, PendingSession>();
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
 function getRoleIdForModes(modes: string[]): string {
-  if (modes.includes("cluedo") || modes.includes("battleship")) {
+  if (modesIncludeCasualGameModes(modes)) {
     return config.casualGameModesRoleId;
   }
 
   return config.bingoPlayersRoleId;
 }
 
+function getChannelIdForSession(session: PendingSession): string {
+  if (session.matchmakingCategory === "casual_games") {
+    return config.casualGameModesChannelId;
+  }
+
+  return config.matchmakingChannelId;
+}
+
 export async function handleTypeButton(interaction: ButtonInteraction) {
   const matchmakingType: MatchmakingType =
     interaction.customId === "mm_type_competitive" ? "competitive" : "casual";
+  const matchmakingCategory: MatchmakingCategory =
+    interaction.customId === "mm_type_competitive"
+      ? "official"
+      : interaction.customId === "mm_type_casual_games"
+        ? "casual_games"
+        : "bingo";
 
   pendingSessions.set(interaction.user.id, {
     matchmakingType,
+    matchmakingCategory,
     hostIsPlayer: matchmakingType === "casual" ? true : undefined,
     searchMinutes: null,
     scheduledAt: null,
@@ -59,15 +75,23 @@ export async function handleTypeButton(interaction: ButtonInteraction) {
   if (matchmakingType === "competitive") {
     await interaction.update({
       content:
-        "Selected: **COMPETITIVE**\n\nWill the host be playing in this match?",
+        "Selected: **OFFICIAL MATCHMAKING**\n\nWill the host be playing in this match?",
       components: [buildCompetitiveHostRoleButtons()],
     });
     return;
   }
 
+  if (matchmakingCategory === "casual_games") {
+    await interaction.update({
+      content: "Selected: **CASUAL GAME MODES**\n\nNow choose the game mode.",
+      components: [buildModeSelect("casual_games")],
+    });
+    return;
+  }
+
   await interaction.update({
-    content: "Selected: **CASUAL**\n\nNow choose the game modes.",
-    components: [buildModeSelect(true)],
+    content: "Selected: **BINGO MODE**\n\nNow choose the game modes.",
+    components: [buildModeSelect("bingo")],
   });
 }
 
@@ -84,7 +108,7 @@ export async function handleCompetitiveHostRoleButton(
       `Competitive host role: **${
         session.hostIsPlayer ? "Playing" : "Only Hosting"
       }**\n\nNow choose the game modes.`,
-    components: [buildModeSelect(false)],
+    components: [buildModeSelect("all")],
   });
 }
 
@@ -366,30 +390,33 @@ export async function handleCreateTicket(
     return;
   }
 
+  await interaction.deferUpdate();
+
   const alreadyActive = await userHasActiveTicketOrAcceptance(interaction.user.id);
 
   if (alreadyActive) {
-    await interaction.reply({
+    await interaction.editReply({
       content:
         "You already have an active matchmaking ticket, or you accepted a ticket that is still active. Finish, cancel, leave, or mark that ticket as wasn't played before creating another one.",
-      ephemeral: true,
+      components: [],
     });
     return;
   }
 
-  const channel = await client.channels.fetch(config.matchmakingChannelId);
+  const channelId = getChannelIdForSession(session);
+  const channel = await client.channels.fetch(channelId);
 
   if (!channel || channel.type !== ChannelType.GuildText) {
-    await interaction.reply({
+    await interaction.editReply({
       content: "The matchmaking channel is invalid or not a text channel.",
-      ephemeral: true,
+      components: [],
     });
     return;
   }
 
   const ticket = await createTicket({
     guildId: config.guildId,
-    channelId: config.matchmakingChannelId,
+    channelId,
     creatorDiscordId: interaction.user.id,
     matchmakingType: session.matchmakingType,
     hostIsPlayer: session.hostIsPlayer ?? true,
@@ -405,9 +432,9 @@ export async function handleCreateTicket(
   });
 
   if (!ticket) {
-    await interaction.reply({
+    await interaction.editReply({
       content: "Failed to create matchmaking ticket.",
-      ephemeral: true,
+      components: [],
     });
     return;
   }
@@ -427,8 +454,8 @@ export async function handleCreateTicket(
 
   pendingSessions.delete(interaction.user.id);
 
-  await interaction.update({
-    content: `Ticket created in <#${config.matchmakingChannelId}>.`,
+  await interaction.editReply({
+    content: `Ticket created in <#${channelId}>.`,
     components: [],
   });
 }

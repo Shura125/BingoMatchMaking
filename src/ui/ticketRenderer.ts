@@ -6,6 +6,12 @@ import {
 } from "discord.js";
 import { MatchTicket, MatchTicketAcceptance } from "../types";
 import {
+  getGameMode,
+  getModeNamesFromIds,
+  getTicketModeNames,
+  modeSupportsRandomTeams,
+} from "../gameModes";
+import {
   getPlayerAcceptances,
   getRequiredAcceptedPlayers,
   getStartModeLabel,
@@ -26,31 +32,7 @@ function getScheduledText(scheduledAt: string | null): string {
 }
 
 export function getSessionModeNames(modes: string[] | undefined): string {
-  if (!modes || modes.length === 0) return "None";
-
-  const names: Record<string, string> = {
-    veilbreak: "Veilbreak",
-    base_game: "Base Game",
-    scadubingo: "Scadubingo",
-    legacy_dungeons: "Legacy Dungeons",
-    cluedo: "Cluedo",
-    battleship: "Battleship",
-  };
-
-  return modes.map((mode) => names[mode] ?? mode).join(", ");
-}
-
-function getModeNames(ticket: MatchTicket): string {
-  const modes: string[] = [];
-
-  if (ticket.veilbreak) modes.push("Veilbreak");
-  if (ticket.base_game) modes.push("Base Game");
-  if (ticket.scadubingo) modes.push("Scadubingo");
-  if (ticket.legacy_dungeons) modes.push("Legacy Dungeons");
-  if (ticket.cluedo) modes.push("Cluedo");
-  if (ticket.battleship) modes.push("Battleship");
-
-  return modes.length > 0 ? modes.join(", ") : "None";
+  return getModeNamesFromIds(modes);
 }
 
 function getStatusLabel(status: string): string {
@@ -58,19 +40,27 @@ function getStatusLabel(status: string): string {
 }
 
 function getGameInfoText(ticket: MatchTicket): string {
-  if (!ticket.lobby_code || !ticket.game_seed) {
+  if (!ticket.started_at) {
     return "Game has not started yet.";
   }
 
-  if (ticket.started_mode === "cluedo") {
-    return "[Elden Cluedo Website](https://kcbrazos.github.io/Elden-Cluedo/#/)";
+  const startedMode = getGameMode(ticket.started_mode);
+
+  if (startedMode?.websiteUrl) {
+    return `[${startedMode.label} Website](${startedMode.websiteUrl})`;
   }
 
-  if (ticket.started_mode === "battleship") {
-    return "[Battleship Website](https://kcbrazos.github.io/Elden-Battleship/#/)";
+  const lines: string[] = [];
+
+  if (startedMode?.usesLobbyCode ?? true) {
+    lines.push(`Lobby Code: **${ticket.lobby_code}**`);
   }
 
-  return `Lobby Code: **${ticket.lobby_code}**\nGame Seed: **${ticket.game_seed}**`;
+  if (startedMode?.usesGameSeed ?? true) {
+    lines.push(`Game Seed: **${ticket.game_seed}**`);
+  }
+
+  return lines.length > 0 ? lines.join("\n") : "Game has started.";
 }
 
 export function buildTicketEmbed(
@@ -142,7 +132,7 @@ export function buildTicketEmbed(
       },
       {
         name: "Modes",
-        value: getModeNames(ticket),
+        value: getTicketModeNames(ticket),
         inline: false,
       },
       ...(ticket.started_mode
@@ -220,6 +210,8 @@ export function buildTicketButtons(ticket: MatchTicket) {
   const canAccept = ticket.status === "open";
   const canStart = ticket.status === "open";
   const canClose = ticket.status === "open" || ticket.status === "started";
+  const canRandomizeTeams =
+    ticket.status === "started" && modeSupportsRandomTeams(ticket.started_mode);
 
   const acceptRow = new ActionRowBuilder<ButtonBuilder>();
 
@@ -253,19 +245,30 @@ export function buildTicketButtons(ticket: MatchTicket) {
       .setDisabled(!canAccept)
   );
 
-  const startRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`ticket_start_${ticket.id}`)
-      .setLabel("Start Game")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!canStart),
+  const startRow = new ActionRowBuilder<ButtonBuilder>();
 
-    new ButtonBuilder()
-      .setCustomId(`ticket_remove_player_${ticket.id}`)
-      .setLabel("Remove Player")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!canAccept)
-  );
+  if (canStart) {
+    startRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`ticket_start_${ticket.id}`)
+        .setLabel("Start Game")
+        .setStyle(ButtonStyle.Success),
+
+      new ButtonBuilder()
+        .setCustomId(`ticket_remove_player_${ticket.id}`)
+        .setLabel("Remove Player")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  if (canRandomizeTeams) {
+    startRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`ticket_randomize_teams_${ticket.id}`)
+        .setLabel("Randomize Teams")
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
 
   const closeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -275,17 +278,13 @@ export function buildTicketButtons(ticket: MatchTicket) {
       .setDisabled(!canClose),
 
     new ButtonBuilder()
-      .setCustomId(`ticket_wasnt_played_${ticket.id}`)
-      .setLabel("Wasn't Played")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!canClose),
-
-    new ButtonBuilder()
       .setCustomId(`ticket_cancel_${ticket.id}`)
       .setLabel("Cancel Ticket")
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!canClose)
   );
 
-  return [acceptRow, startRow, closeRow];
+  return [acceptRow, startRow, closeRow].filter(
+    (row) => row.components.length > 0
+  );
 }

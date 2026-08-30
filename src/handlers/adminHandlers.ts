@@ -36,7 +36,6 @@ export async function handleForceCloseCommand(
   const ticketId = interaction.options.getString("ticket_id", true);
   const status = interaction.options.getString("status", true) as
     | "finished"
-    | "wasnt_played"
     | "cancelled"
     | "expired";
 

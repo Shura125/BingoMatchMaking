@@ -1,5 +1,6 @@
 export type MatchmakingType = "casual" | "competitive";
 export type AcceptanceType = "player" | "ref";
+export type MatchmakingCategory = "bingo" | "casual_games" | "official";
 
 export type TicketStatus =
   | "open"
@@ -11,6 +12,7 @@ export type TicketStatus =
 
 export type PendingSession = {
   matchmakingType?: MatchmakingType;
+  matchmakingCategory?: MatchmakingCategory;
   hostIsPlayer?: boolean;
   modes?: string[];
   searchMinutes?: number | null;

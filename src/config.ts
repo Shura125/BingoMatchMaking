@@ -17,6 +17,7 @@ export const config = {
   discordClientId: requireEnv("DISCORD_CLIENT_ID"),
   guildId: requireEnv("GUILD_ID"),
   matchmakingChannelId: requireEnv("MATCHMAKING_CHANNEL_ID"),
+  casualGameModesChannelId: requireEnv("CASUAL_GAME_MODES_CHANNEL_ID"),
   bingoPlayersRoleId: requireEnv("BINGO_PLAYERS_ROLE_ID"),
   casualGameModesRoleId: requireEnv("CASUAL_GAME_MODES_ROLE_ID"),
 

@@ -1,5 +1,6 @@
-import { Client, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { config } from "./config";
+import { GAME_MODE_IDS } from "./gameModes";
 import { registerCommands } from "./commands/registerCommands";
 import { handleChatInputCommand } from "./handlers/commandHandler";
 import {
@@ -19,6 +20,7 @@ import {
   handleAcceptTicket,
   handleCloseTicket,
   handleLeaveQueueButton,
+  handleRandomizeTeams,
   handleRemovePlayerButton,
   handleRemovePlayerSelect,
   handleStartGame,
@@ -30,10 +32,20 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-client.once("ready", () => {
+function isInteractionRaceError(error: unknown): boolean {
+  const code = (error as { code?: number }).code;
+
+  return code === 10062 || code === 40060;
+}
+
+client.once(Events.ClientReady, () => {
   console.log(`Logged in as ${client.user?.tag}`);
 
   startExpireTicketsJob(client);
+});
+
+client.on(Events.Error, (error) => {
+  console.error("Discord client error:", error);
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -45,7 +57,8 @@ client.on("interactionCreate", async (interaction) => {
 
     if (interaction.isButton()) {
       if (
-        interaction.customId === "mm_type_casual" ||
+        interaction.customId === "mm_type_bingo" ||
+        interaction.customId === "mm_type_casual_games" ||
         interaction.customId === "mm_type_competitive"
       ) {
         await handleTypeButton(interaction);
@@ -125,56 +138,25 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      // IMPORTANT:
-      // These specific routes must be above the generic "ticket_start_" route.
-      if (interaction.customId.startsWith("ticket_start_as_base_game_")) {
+      if (interaction.customId.startsWith("ticket_randomize_teams_")) {
         const ticketId = interaction.customId.replace(
-          "ticket_start_as_base_game_",
+          "ticket_randomize_teams_",
           ""
         );
 
-        await handleStartGameAsMode(interaction, ticketId, "base_game");
+        await handleRandomizeTeams(interaction, ticketId);
         return;
       }
 
-      if (interaction.customId.startsWith("ticket_start_as_scadubingo_")) {
-        const ticketId = interaction.customId.replace(
-          "ticket_start_as_scadubingo_",
-          ""
-        );
+      for (const modeId of GAME_MODE_IDS) {
+        const customIdPrefix = `ticket_start_as_${modeId}_`;
 
-        await handleStartGameAsMode(interaction, ticketId, "scadubingo");
-        return;
-      }
+        if (interaction.customId.startsWith(customIdPrefix)) {
+          const ticketId = interaction.customId.replace(customIdPrefix, "");
 
-      if (interaction.customId.startsWith("ticket_start_as_legacy_dungeons_")) {
-        const ticketId = interaction.customId.replace(
-          "ticket_start_as_legacy_dungeons_",
-          ""
-        );
-
-        await handleStartGameAsMode(interaction, ticketId, "legacy_dungeons");
-        return;
-      }
-
-      if (interaction.customId.startsWith("ticket_start_as_cluedo_")) {
-        const ticketId = interaction.customId.replace(
-          "ticket_start_as_cluedo_",
-          ""
-        );
-
-        await handleStartGameAsMode(interaction, ticketId, "cluedo");
-        return;
-      }
-
-      if (interaction.customId.startsWith("ticket_start_as_battleship_")) {
-        const ticketId = interaction.customId.replace(
-          "ticket_start_as_battleship_",
-          ""
-        );
-
-        await handleStartGameAsMode(interaction, ticketId, "battleship");
-        return;
+          await handleStartGameAsMode(interaction, ticketId, modeId);
+          return;
+        }
       }
 
       if (interaction.customId.startsWith("ticket_start_")) {
@@ -188,16 +170,6 @@ client.on("interactionCreate", async (interaction) => {
         const ticketId = interaction.customId.replace("ticket_finish_", "");
 
         await handleCloseTicket(interaction, ticketId, "finished");
-        return;
-      }
-
-      if (interaction.customId.startsWith("ticket_wasnt_played_")) {
-        const ticketId = interaction.customId.replace(
-          "ticket_wasnt_played_",
-          ""
-        );
-
-        await handleCloseTicket(interaction, ticketId, "wasnt_played");
         return;
       }
 
@@ -252,16 +224,27 @@ client.on("interactionCreate", async (interaction) => {
     console.error("Interaction failed:", error);
 
     if (interaction.isRepliable()) {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({
-          content: "Something went wrong.",
-          ephemeral: true,
-        });
-      } else {
-        await interaction.reply({
-          content: "Something went wrong.",
-          ephemeral: true,
-        });
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({
+            content: "Something went wrong.",
+            ephemeral: true,
+          });
+        } else {
+          await interaction.reply({
+            content: "Something went wrong.",
+            ephemeral: true,
+          });
+        }
+      } catch (responseError) {
+        if (isInteractionRaceError(responseError)) {
+          console.warn(
+            "Could not send interaction error response because Discord already closed or acknowledged it."
+          );
+          return;
+        }
+
+        console.error("Failed to send interaction error response:", responseError);
       }
     }
   }

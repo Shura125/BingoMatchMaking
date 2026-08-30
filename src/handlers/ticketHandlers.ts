@@ -6,6 +6,12 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
 } from "discord.js";
+import {
+  GameModeId,
+  getRequiredAcceptedPlayersForMode,
+  modeSupportsRandomTeams,
+  ticketHasMode,
+} from "../gameModes";
 import { AcceptanceType } from "../types";
 import {
   addAcceptance,
@@ -22,7 +28,6 @@ import {
   getRequiredAcceptedPlayers,
   getStartModeLabel,
   getStartModeOptionsForTicket,
-  StartMode,
 } from "../utils/playerLimits";
 import { buildTicketButtons, buildTicketEmbed } from "../ui/ticketRenderer";
 import { deleteTicketMessage } from "../utils/ticketCleanup";
@@ -39,34 +44,40 @@ async function renderTicketMessage(ticketId: string) {
   };
 }
 
-type Ticket = NonNullable<Awaited<ReturnType<typeof fetchTicket>>>;
+function shufflePlayers(players: string[]): string[] {
+  const shuffled = [...players];
 
-function ticketIncludesStartMode(ticket: Ticket, mode: StartMode): boolean {
-  if (mode === "veilbreak") return ticket.veilbreak;
-  if (mode === "base_game") return ticket.base_game;
-  if (mode === "scadubingo") return ticket.scadubingo;
-  if (mode === "legacy_dungeons") return ticket.legacy_dungeons;
-  if (mode === "cluedo") return ticket.cluedo;
-  if (mode === "battleship") return ticket.battleship;
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const currentPlayer = shuffled[index];
 
-  return false;
+    shuffled[index] = shuffled[swapIndex];
+    shuffled[swapIndex] = currentPlayer;
+  }
+
+  return shuffled;
 }
 
-function getRequiredAcceptedPlayersForStartMode(
-  ticket: Ticket,
-  mode: StartMode
-): number {
-  const hostPlayerCount = ticket.host_is_player ? 1 : 0;
-
-  if (mode === "cluedo" || mode === "battleship") {
-    return 6 - hostPlayerCount;
+function getTeamSizeLabel(startedMode: string | null, playerCount: number): string {
+  if (startedMode === "battleship") {
+    return `${playerCount / 2}v${playerCount / 2}`;
   }
 
-  if (mode === "veilbreak") {
-    return 4 - hostPlayerCount;
-  }
+  return "2v2";
+}
 
-  return 2 - hostPlayerCount;
+function formatRandomizedTeams(players: string[], startedMode: string | null) {
+  const shuffledPlayers = shufflePlayers(players);
+  const half = Math.ceil(shuffledPlayers.length / 2);
+  const teamOne = shuffledPlayers.slice(0, half);
+  const teamTwo = shuffledPlayers.slice(half);
+  const teamSizeLabel = getTeamSizeLabel(startedMode, shuffledPlayers.length);
+
+  return (
+    `Randomized teams for **${getStartModeLabel(startedMode)} ${teamSizeLabel}**:\n\n` +
+    `**Team 1**\n${teamOne.map((discordId) => `<@${discordId}>`).join("\n")}\n\n` +
+    `**Team 2**\n${teamTwo.map((discordId) => `<@${discordId}>`).join("\n")}`
+  );
 }
 
 export async function handleAcceptTicket(
@@ -462,10 +473,71 @@ export async function handleLeaveQueueButton(
   await interaction.update(rendered);
 }
 
+export async function handleRandomizeTeams(
+  interaction: ButtonInteraction,
+  ticketId: string
+) {
+  const ticket = await fetchTicket(ticketId);
+
+  if (!ticket) {
+    await interaction.reply({
+      content: "This ticket no longer exists.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (ticket.creator_discord_id !== interaction.user.id) {
+    await interaction.reply({
+      content: "Only the host can randomize teams for this ticket.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (ticket.status !== "started") {
+    await interaction.reply({
+      content: "Teams can only be randomized after the game has started.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!modeSupportsRandomTeams(ticket.started_mode)) {
+    await interaction.reply({
+      content: "Random teams are only available for Veilbreak and Battleship.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const acceptances = await getAcceptances(ticketId);
+  const playerIds = [
+    ...(ticket.host_is_player ? [ticket.creator_discord_id] : []),
+    ...getPlayerAcceptances(acceptances).map(
+      (acceptance) => acceptance.discord_id
+    ),
+  ];
+
+  if (playerIds.length < 2 || playerIds.length % 2 !== 0) {
+    await interaction.reply({
+      content:
+        "Teams need an even number of players before they can be randomized.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    content: formatRandomizedTeams(playerIds, ticket.started_mode),
+    allowedMentions: { parse: [] },
+  });
+}
+
 export async function handleStartGameAsMode(
   interaction: ButtonInteraction,
   ticketId: string,
-  startedMode: StartMode
+  startedMode: GameModeId
 ) {
   const ticket = await fetchTicket(ticketId);
 
@@ -493,7 +565,7 @@ export async function handleStartGameAsMode(
     return;
   }
 
-  if (!ticketIncludesStartMode(ticket, startedMode)) {
+  if (!ticketHasMode(ticket, startedMode)) {
     await interaction.reply({
       content: `This ticket did not include ${getStartModeLabel(
         startedMode
@@ -505,7 +577,7 @@ export async function handleStartGameAsMode(
 
   const acceptances = await getAcceptances(ticketId);
   const playerAcceptances = getPlayerAcceptances(acceptances);
-  const requiredAcceptedPlayers = getRequiredAcceptedPlayersForStartMode(
+  const requiredAcceptedPlayers = getRequiredAcceptedPlayersForMode(
     ticket,
     startedMode
   );

@@ -9,6 +9,13 @@ import {
 } from "discord.js";
 import { buildTypeButtons } from "../ui/setupComponents";
 import {
+  GameModeId,
+  getGameModeForCommand,
+  getGameModeLabel,
+  getTicketModeNames as getModeNamesForFlags,
+  modesIncludeCasualGameModes,
+} from "../gameModes";
+import {
   closeTicket,
   createTicket,
   findActiveTicketForUser,
@@ -38,19 +45,12 @@ function getMatchModeNames(match: {
   cluedo: boolean;
   battleship: boolean;
 }): string {
-  const modes: string[] = [];
+  const modeNames = getModeNamesForFlags(match).replace("None", "Unknown");
 
-  if (match.veilbreak) modes.push("Veilbreak");
-  if (match.base_game) modes.push("Base Game");
-  if (match.scadubingo) modes.push("Scadubingo");
-  if (match.legacy_dungeons) modes.push("Legacy Dungeons");
-  if (match.cluedo) modes.push("Cluedo");
-  if (match.battleship) modes.push("Battleship");
-
-  return modes.length > 0 ? modes.join(", ") : "Unknown";
+  return modeNames;
 }
 
-function getTicketModeNames(ticket: {
+function formatTicketModeNames(ticket: {
   veilbreak: boolean;
   base_game: boolean;
   scadubingo: boolean;
@@ -58,16 +58,7 @@ function getTicketModeNames(ticket: {
   cluedo: boolean;
   battleship: boolean;
 }): string {
-  const modes: string[] = [];
-
-  if (ticket.veilbreak) modes.push("Veilbreak");
-  if (ticket.base_game) modes.push("Base Game");
-  if (ticket.scadubingo) modes.push("Scadubingo");
-  if (ticket.legacy_dungeons) modes.push("Legacy Dungeons");
-  if (ticket.cluedo) modes.push("Cluedo");
-  if (ticket.battleship) modes.push("Battleship");
-
-  return modes.length > 0 ? modes.join(", ") : "Unknown";
+  return getModeNamesForFlags(ticket).replace("None", "Unknown");
 }
 
 function getTicketJumpUrlFromParts(ticket: {
@@ -101,7 +92,7 @@ function formatOpenTicketLine(ticket: {
   )}:R>`;
 
   return (
-    `**${ticket.matchmaking_type.toUpperCase()}** - ${getTicketModeNames(ticket)}\n` +
+    `**${ticket.matchmaking_type.toUpperCase()}** - ${formatTicketModeNames(ticket)}\n` +
     `Host: <@${ticket.creator_discord_id}>\n` +
     `Status: **${ticket.status.toUpperCase()}**\n` +
     `Created: ${createdTime}\n` +
@@ -218,37 +209,26 @@ function scheduleTicketExpiration(options: {
   }, searchMinutes * 60 * 1000);
 }
 
-type QuickMode =
-  | "veilbreak"
-  | "base_game"
-  | "scadubingo"
-  | "legacy_dungeons"
-  | "cluedo"
-  | "battleship";
-
-function getQuickModeLabel(mode: QuickMode): string {
-  if (mode === "veilbreak") return "Veilbreak";
-  if (mode === "base_game") return "Base Game";
-  if (mode === "scadubingo") return "Scadubingo";
-  if (mode === "legacy_dungeons") return "Legacy Dungeons";
-  if (mode === "cluedo") return "Cluedo";
-  if (mode === "battleship") return "Battleship";
-
-  return mode;
-}
-
-function getRoleIdForQuickMode(mode: QuickMode): string {
-  if (mode === "cluedo" || mode === "battleship") {
+function getRoleIdForQuickMode(mode: GameModeId): string {
+  if (modesIncludeCasualGameModes([mode])) {
     return config.casualGameModesRoleId;
   }
 
   return config.bingoPlayersRoleId;
 }
 
+function getChannelIdForQuickMode(mode: GameModeId): string {
+  if (modesIncludeCasualGameModes([mode])) {
+    return config.casualGameModesChannelId;
+  }
+
+  return config.matchmakingChannelId;
+}
+
 async function createQuickCasualTicket(
   client: Client,
   interaction: ChatInputCommandInteraction,
-  mode: QuickMode
+  mode: GameModeId
 ) {
   if (!interaction.deferred && !interaction.replied) {
     await interaction.deferReply({ ephemeral: true });
@@ -262,12 +242,13 @@ async function createQuickCasualTicket(
     await interaction.editReply({
       content:
         "You already have an active casual matchmaking ticket, or you accepted a casual ticket that is still active.\n" +
-        "Finish, cancel, leave, or mark that casual ticket as wasn't played before creating another casual one.",
+        "Finish, cancel, or leave that casual ticket before creating another casual one.",
     });
     return;
   }
 
-  const channel = await client.channels.fetch(config.matchmakingChannelId);
+  const channelId = getChannelIdForQuickMode(mode);
+  const channel = await client.channels.fetch(channelId);
 
   if (!channel || channel.type !== ChannelType.GuildText) {
     await interaction.editReply({
@@ -276,13 +257,13 @@ async function createQuickCasualTicket(
     return;
   }
 
-  const modeLabel = getQuickModeLabel(mode);
+  const modeLabel = getGameModeLabel(mode);
   const roleId = getRoleIdForQuickMode(mode);
   const searchMinutes = 60;
 
   const ticket = await createTicket({
     guildId: config.guildId,
-    channelId: config.matchmakingChannelId,
+    channelId,
     creatorDiscordId: interaction.user.id,
     matchmakingType: "casual",
     hostIsPlayer: true,
@@ -322,7 +303,7 @@ async function createQuickCasualTicket(
   });
 
   await interaction.editReply({
-    content: `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${config.matchmakingChannelId}>.`,
+    content: `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${channelId}>.`,
   });
 }
 
@@ -330,39 +311,16 @@ export async function handleChatInputCommand(
   client: Client,
   interaction: ChatInputCommandInteraction
 ) {
-  if (interaction.commandName === "veilbreak") {
-    await createQuickCasualTicket(client, interaction, "veilbreak");
-    return;
-  }
+  const quickMode = getGameModeForCommand(interaction.commandName);
 
-  if (interaction.commandName === "basegame") {
-    await createQuickCasualTicket(client, interaction, "base_game");
-    return;
-  }
-
-  if (interaction.commandName === "scadubingo") {
-    await createQuickCasualTicket(client, interaction, "scadubingo");
-    return;
-  }
-
-  if (interaction.commandName === "legacydungeons") {
-    await createQuickCasualTicket(client, interaction, "legacy_dungeons");
-    return;
-  }
-
-  if (interaction.commandName === "cluedo") {
-    await createQuickCasualTicket(client, interaction, "cluedo");
-    return;
-  }
-
-  if (interaction.commandName === "battleship") {
-    await createQuickCasualTicket(client, interaction, "battleship");
+  if (quickMode) {
+    await createQuickCasualTicket(client, interaction, quickMode.id);
     return;
   }
 
   if (interaction.commandName === "creatematch") {
     await interaction.reply({
-      content: "Choose the type of matchmaking ticket you want to create.",
+      content: "Choose the matchmaking path you want to create.",
       components: [buildTypeButtons()],
       ephemeral: true,
     });

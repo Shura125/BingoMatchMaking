@@ -1,5 +1,13 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 import { config } from "../config";
+import { GAME_MODES } from "../gameModes";
+
+const quickModeCommands = GAME_MODES.map((mode) =>
+  new SlashCommandBuilder()
+    .setName(mode.quickCommandName)
+    .setDescription(mode.quickCommandDescription)
+    .toJSON()
+);
 
 const commands = [
   new SlashCommandBuilder()
@@ -32,79 +40,46 @@ const commands = [
     .setDescription("View all currently open or started matchmaking tickets.")
     .toJSON(),
 
-    new SlashCommandBuilder()
-    .setName("veilbreak")
-    .setDescription("Create a casual Veilbreak matchmaking ticket searching for 1 hour.")
-    .toJSON(),
+  ...quickModeCommands,
 
   new SlashCommandBuilder()
-    .setName("basegame")
-    .setDescription("Create a casual Base Game matchmaking ticket searching for 1 hour.")
-    .toJSON(),
-
-  new SlashCommandBuilder()
-    .setName("scadubingo")
-    .setDescription("Create a casual Scadubingo matchmaking ticket searching for 1 hour.")
-    .toJSON(),
-
-  new SlashCommandBuilder()
-    .setName("legacydungeons")
-    .setDescription(
-      "Create a casual Legacy Dungeons matchmaking ticket searching for 1 hour."
+    .setName("forceclose")
+    .setDescription("Admin: force close a matchmaking ticket.")
+    .addStringOption((option) =>
+      option
+        .setName("ticket_id")
+        .setDescription("The ticket UUID.")
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("status")
+        .setDescription("The status to set.")
+        .setRequired(true)
+        .addChoices(
+          { name: "Cancelled", value: "cancelled" },
+          { name: "Expired", value: "expired" },
+          { name: "Finished", value: "finished" }
+        )
     )
     .toJSON(),
 
   new SlashCommandBuilder()
-    .setName("cluedo")
-    .setDescription("Create a casual Cluedo matchmaking ticket searching for 1 hour.")
-    .toJSON(),
-
-  new SlashCommandBuilder()
-    .setName("battleship")
-    .setDescription(
-      "Create a casual Battleship matchmaking ticket searching for 1 hour."
+    .setName("removeplayer")
+    .setDescription("Admin: remove a player or ref from a ticket queue.")
+    .addStringOption((option) =>
+      option
+        .setName("ticket_id")
+        .setDescription("The ticket UUID.")
+        .setRequired(true)
+    )
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("The user to remove from the ticket.")
+        .setRequired(true)
     )
     .toJSON(),
-
-    new SlashCommandBuilder()
-  .setName("forceclose")
-  .setDescription("Admin: force close a matchmaking ticket.")
-  .addStringOption((option) =>
-    option
-      .setName("ticket_id")
-      .setDescription("The ticket UUID.")
-      .setRequired(true)
-  )
-  .addStringOption((option) =>
-    option
-      .setName("status")
-      .setDescription("The status to set.")
-      .setRequired(true)
-      .addChoices(
-        { name: "Cancelled", value: "cancelled" },
-        { name: "Expired", value: "expired" },
-        { name: "Wasn't Played", value: "wasnt_played" },
-        { name: "Finished", value: "finished" }
-      )
-  )
-  .toJSON(),
-
-new SlashCommandBuilder()
-  .setName("removeplayer")
-  .setDescription("Admin: remove a player or ref from a ticket queue.")
-  .addStringOption((option) =>
-    option
-      .setName("ticket_id")
-      .setDescription("The ticket UUID.")
-      .setRequired(true)
-  )
-  .addUserOption((option) =>
-    option
-      .setName("user")
-      .setDescription("The user to remove from the ticket.")
-      .setRequired(true)
-  )
-  .toJSON(),
 ];
 
 export async function registerCommands() {

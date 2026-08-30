@@ -7,6 +7,7 @@ import {
   MatchmakingType,
   TicketStatus,
 } from "../types";
+import { GameModeId, getGameMode, getModeFlags } from "../gameModes";
 import { generateGameSeed, generateLobbyCode } from "../utils/generators";
 
 const activeStatuses: TicketStatus[] = ["open", "started"];
@@ -150,6 +151,7 @@ export async function createTicket(input: {
     isCasualSearchNow && input.searchMinutes && input.searchMinutes > 0
       ? new Date(Date.now() + input.searchMinutes * 60 * 1000).toISOString()
       : null;
+  const modeFlags = getModeFlags(input.modes);
 
   const { data, error } = await supabase
     .from("bot_match_tickets")
@@ -167,12 +169,7 @@ export async function createTicket(input: {
       match_title: input.matchTitle ?? null,
       match_details: input.matchDetails ?? null,
 
-      veilbreak: input.modes.includes("veilbreak"),
-      base_game: input.modes.includes("base_game"),
-      scadubingo: input.modes.includes("scadubingo"),
-      legacy_dungeons: input.modes.includes("legacy_dungeons"),
-      cluedo: input.modes.includes("cluedo"),
-      battleship: input.modes.includes("battleship"),
+      ...modeFlags,
 
       search_minutes: isCasualSearchNow ? input.searchMinutes : null,
       expires_at: expiresAt,
@@ -242,15 +239,17 @@ export async function addAcceptance(input: {
 
 export async function startTicketGame(
   ticketId: string,
-  startedMode: string
+  startedMode: GameModeId
 ): Promise<boolean> {
+  const mode = getGameMode(startedMode);
+
   const { error } = await supabase
     .from("bot_match_tickets")
     .update({
       status: "started",
       started_mode: startedMode,
-      lobby_code: generateLobbyCode(),
-      game_seed: generateGameSeed(),
+      lobby_code: mode?.usesLobbyCode ? generateLobbyCode() : null,
+      game_seed: mode?.usesGameSeed ? generateGameSeed() : null,
       started_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })

@@ -7,13 +7,19 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
+import { GameModeSelectGroup, getGameModesForSelect } from "../gameModes";
 
 export function buildTypeButtons() {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId("mm_type_casual")
-      .setLabel("Casual Matchmaking")
+      .setCustomId("mm_type_bingo")
+      .setLabel("Bingo Mode")
       .setStyle(ButtonStyle.Primary),
+
+    new ButtonBuilder()
+      .setCustomId("mm_type_casual_games")
+      .setLabel("Casual Game Modes")
+      .setStyle(ButtonStyle.Success),
 
     new ButtonBuilder()
       .setCustomId("mm_type_competitive")
@@ -36,44 +42,14 @@ export function buildCompetitiveHostRoleButtons() {
   );
 }
 
-export function buildModeSelect(includeCasualGameModes = false) {
-  const options = [
-    {
-      label: "Veilbreak",
-      value: "veilbreak",
-      description: "Search for a Veilbreak match.",
-    },
-    {
-      label: "Base Game",
-      value: "base_game",
-      description: "Search for a Base Game match.",
-    },
-    {
-      label: "Scadubingo",
-      value: "scadubingo",
-      description: "Search for a Scadubingo match.",
-    },
-    {
-      label: "Legacy Dungeons",
-      value: "legacy_dungeons",
-      description: "Search for a Legacy Dungeons match.",
-    },
-  ];
-
-  if (includeCasualGameModes) {
-    options.push(
-      {
-        label: "Cluedo",
-        value: "cluedo",
-        description: "Search for a 6-player Cluedo match.",
-      },
-      {
-        label: "Battleship",
-        value: "battleship",
-        description: "Search for a 6-player Battleship match.",
-      }
-    );
-  }
+export function buildModeSelect(
+  modeGroup: GameModeSelectGroup = "bingo"
+) {
+  const options = getGameModesForSelect(modeGroup).map((mode) => ({
+    label: mode.label,
+    value: mode.id,
+    description: mode.description,
+  }));
 
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
