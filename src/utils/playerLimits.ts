@@ -3,6 +3,7 @@ import {
   GameModeId,
   getGameMode,
   getGameModeLabel,
+  getHighestMaxPlayersForTicket,
   getRequiredAcceptedPlayersForMode,
   getTicketModeIds,
 } from "../gameModes";
@@ -29,6 +30,13 @@ export function getRequiredAcceptedPlayers(ticket: MatchTicket): number {
   return totalRequiredPlayers - hostPlayerCount;
 }
 
+export function getMaxAcceptedPlayers(ticket: MatchTicket): number {
+  const hostPlayerCount = ticket.host_is_player ? 1 : 0;
+  const maxPlayers = getMaxTotalPlayers(ticket);
+
+  return maxPlayers - hostPlayerCount;
+}
+
 export function getTotalRequiredPlayers(ticket: MatchTicket): number {
   const selectedModes = getTicketModeIds(ticket)
     .map((modeId) => getGameMode(modeId))
@@ -37,6 +45,10 @@ export function getTotalRequiredPlayers(ticket: MatchTicket): number {
   if (selectedModes.length === 0) return 2;
 
   return Math.max(...selectedModes.map((mode) => mode.totalPlayers));
+}
+
+export function getMaxTotalPlayers(ticket: MatchTicket): number {
+  return getHighestMaxPlayersForTicket(ticket);
 }
 
 export function getCurrentPlayerCount(
@@ -58,7 +70,15 @@ export function getPlayerAcceptances(
 
 export function getPlayerRequirementText(ticket: MatchTicket): string {
   const totalRequiredPlayers = getTotalRequiredPlayers(ticket);
+  const maxPlayers = getMaxTotalPlayers(ticket);
   const acceptedPlayers = getRequiredAcceptedPlayers(ticket);
+  const maxAcceptedPlayers = getMaxAcceptedPlayers(ticket);
+
+  if (maxPlayers > totalRequiredPlayers) {
+    return ticket.host_is_player
+      ? `This ticket needs ${totalRequiredPlayers} total players to start and can hold up to ${maxPlayers}: host + up to ${maxAcceptedPlayers} accepted players.`
+      : `This ticket needs ${acceptedPlayers} accepted players to start and can hold up to ${maxAcceptedPlayers} accepted players.`;
+  }
 
   if (ticket.host_is_player) {
     return `This ticket requires exactly ${totalRequiredPlayers} total players: host + ${acceptedPlayers} accepted player${

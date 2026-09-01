@@ -13,6 +13,7 @@ import {
 } from "../gameModes";
 import {
   getPlayerAcceptances,
+  getMaxTotalPlayers,
   getRequiredAcceptedPlayers,
   getStartModeLabel,
   getTotalRequiredPlayers,
@@ -70,6 +71,7 @@ export function buildTicketEmbed(
   const playerAcceptances = getPlayerAcceptances(acceptances);
   const requiredAcceptedPlayers = getRequiredAcceptedPlayers(ticket);
   const totalRequiredPlayers = getTotalRequiredPlayers(ticket);
+  const maxTotalPlayers = getMaxTotalPlayers(ticket);
 
   const currentPlayerCount =
     playerAcceptances.length + (ticket.host_is_player ? 1 : 0);
@@ -78,8 +80,9 @@ export function buildTicketEmbed(
     (acceptance) => acceptance.acceptance_type === "ref"
   );
 
+  const displaySlots = ticket.status === "open" ? maxTotalPlayers : totalRequiredPlayers;
   const waitingSlots = Math.max(
-    requiredAcceptedPlayers - playerAcceptances.length,
+    displaySlots - currentPlayerCount,
     0
   );
 
@@ -180,7 +183,10 @@ export function buildTicketEmbed(
         inline: false,
       },
       {
-        name: `Players (${currentPlayerCount}/${totalRequiredPlayers})`,
+        name:
+          maxTotalPlayers > totalRequiredPlayers && ticket.status === "open"
+            ? `Players (${currentPlayerCount}/${maxTotalPlayers}, ${totalRequiredPlayers} needed to start)`
+            : `Players (${currentPlayerCount}/${totalRequiredPlayers})`,
         value:
           `Host: <@${ticket.creator_discord_id}>${
             ticket.host_is_player ? " *(playing)*" : " *(not playing)*"

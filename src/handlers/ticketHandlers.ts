@@ -25,6 +25,7 @@ import {
 import {
   getPlayerAcceptances,
   getPlayerRequirementText,
+  getMaxAcceptedPlayers,
   getRequiredAcceptedPlayers,
   getStartModeLabel,
   getStartModeOptionsForTicket,
@@ -140,15 +141,15 @@ export async function handleAcceptTicket(
   }
 
   const playerAcceptances = getPlayerAcceptances(existingAcceptances);
-  const requiredAcceptedPlayers = getRequiredAcceptedPlayers(ticket);
+  const maxAcceptedPlayers = getMaxAcceptedPlayers(ticket);
 
   if (
     acceptanceType === "player" &&
-    playerAcceptances.length >= requiredAcceptedPlayers
+    playerAcceptances.length >= maxAcceptedPlayers
   ) {
     await interaction.reply({
       content:
-        `This ticket already has the required number of players.\n\n` +
+        `This ticket already has the maximum number of players.\n\n` +
         getPlayerRequirementText(ticket),
       ephemeral: true,
     });
