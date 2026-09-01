@@ -64,6 +64,67 @@ function getGameInfoText(ticket: MatchTicket): string {
   return lines.length > 0 ? lines.join("\n") : "Game has started.";
 }
 
+function getDisplayTotalPlayers(options: {
+  ticket: MatchTicket;
+  currentPlayerCount: number;
+  totalRequiredPlayers: number;
+  maxTotalPlayers: number;
+}): number {
+  const {
+    ticket,
+    currentPlayerCount,
+    totalRequiredPlayers,
+    maxTotalPlayers,
+  } = options;
+
+  if (ticket.status !== "open" || !ticket.battleship) {
+    return ticket.status === "open" ? maxTotalPlayers : totalRequiredPlayers;
+  }
+
+  if (currentPlayerCount < totalRequiredPlayers) {
+    return totalRequiredPlayers;
+  }
+
+  if (currentPlayerCount < 8) {
+    return 8;
+  }
+
+  return maxTotalPlayers;
+}
+
+function getBattleshipExpansionText(
+  ticket: MatchTicket,
+  currentPlayerCount: number
+): string | null {
+  if (ticket.status !== "open" || !ticket.battleship) return null;
+
+  if (currentPlayerCount < 6) {
+    const neededPlayers = 6 - currentPlayerCount;
+
+    return `Needs ${neededPlayers} more player${
+      neededPlayers === 1 ? "" : "s"
+    } to start 3v3. More players can join afterward for 4v4 or 5v5.`;
+  }
+
+  if (currentPlayerCount < 8) {
+    const playersForFourVsFour = 8 - currentPlayerCount;
+
+    return `Ready to start 3v3. ${playersForFourVsFour} more player${
+      playersForFourVsFour === 1 ? "" : "s"
+    } can join for 4v4.`;
+  }
+
+  if (currentPlayerCount < 10) {
+    const playersForFiveVsFive = 10 - currentPlayerCount;
+
+    return `Ready to start 4v4. ${playersForFiveVsFive} more player${
+      playersForFiveVsFive === 1 ? "" : "s"
+    } can join for 5v5.`;
+  }
+
+  return "Full 5v5 lobby.";
+}
+
 export function buildTicketEmbed(
   ticket: MatchTicket,
   acceptances: MatchTicketAcceptance[]
@@ -80,10 +141,16 @@ export function buildTicketEmbed(
     (acceptance) => acceptance.acceptance_type === "ref"
   );
 
-  const displaySlots = ticket.status === "open" ? maxTotalPlayers : totalRequiredPlayers;
-  const waitingSlots = Math.max(
-    displaySlots - currentPlayerCount,
-    0
+  const displaySlots = getDisplayTotalPlayers({
+    ticket,
+    currentPlayerCount,
+    totalRequiredPlayers,
+    maxTotalPlayers,
+  });
+  const waitingSlots = Math.max(displaySlots - currentPlayerCount, 0);
+  const battleshipExpansionText = getBattleshipExpansionText(
+    ticket,
+    currentPlayerCount
   );
 
   const acceptedPlayerLines = playerAcceptances.map(
@@ -185,13 +252,14 @@ export function buildTicketEmbed(
       {
         name:
           maxTotalPlayers > totalRequiredPlayers && ticket.status === "open"
-            ? `Players (${currentPlayerCount}/${maxTotalPlayers}, ${totalRequiredPlayers} needed to start)`
+            ? `Players (${currentPlayerCount}/${displaySlots}, ${totalRequiredPlayers} needed to start)`
             : `Players (${currentPlayerCount}/${totalRequiredPlayers})`,
         value:
           `Host: <@${ticket.creator_discord_id}>${
             ticket.host_is_player ? " *(playing)*" : " *(not playing)*"
           }\n` +
           `Accepted Players: **${playerAcceptances.length}/${requiredAcceptedPlayers}**\n\n` +
+          (battleshipExpansionText ? `${battleshipExpansionText}\n\n` : "") +
           playerPriority,
         inline: false,
       }
