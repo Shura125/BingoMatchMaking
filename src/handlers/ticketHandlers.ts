@@ -19,6 +19,7 @@ import {
   fetchTicket,
   getAcceptances,
   leaveSpecificTicket,
+  setRandomizedTeams,
   startTicketGame,
   userHasActiveCasualTicketOrAcceptance,
 } from "../services/ticketService";
@@ -75,7 +76,7 @@ function formatRandomizedTeams(players: string[], startedMode: string | null) {
   const teamSizeLabel = getTeamSizeLabel(startedMode, shuffledPlayers.length);
 
   return (
-    `Randomized teams for **${getStartModeLabel(startedMode)} ${teamSizeLabel}**:\n\n` +
+    `**${getStartModeLabel(startedMode)} ${teamSizeLabel}**\n\n` +
     `**Team 1**\n${teamOne.map((discordId) => `<@${discordId}>`).join("\n")}\n\n` +
     `**Team 2**\n${teamTwo.map((discordId) => `<@${discordId}>`).join("\n")}`
   );
@@ -512,6 +513,14 @@ export async function handleRandomizeTeams(
     return;
   }
 
+  if (ticket.randomized_teams) {
+    await interaction.reply({
+      content: "Teams have already been randomized for this ticket.",
+      ephemeral: true,
+    });
+    return;
+  }
+
   const acceptances = await getAcceptances(ticketId);
   const playerIds = [
     ...(ticket.host_is_player ? [ticket.creator_discord_id] : []),
@@ -529,10 +538,28 @@ export async function handleRandomizeTeams(
     return;
   }
 
-  await interaction.reply({
-    content: formatRandomizedTeams(playerIds, ticket.started_mode),
-    allowedMentions: { parse: [] },
-  });
+  const randomizedTeams = formatRandomizedTeams(playerIds, ticket.started_mode);
+  const saved = await setRandomizedTeams(ticketId, randomizedTeams);
+
+  if (!saved) {
+    await interaction.reply({
+      content: "Teams have already been randomized for this ticket.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const rendered = await renderTicketMessage(ticketId);
+
+  if (!rendered) {
+    await interaction.reply({
+      content: "Teams were randomized, but the ticket could not refresh.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.update(rendered);
 }
 
 export async function handleStartGameAsMode(

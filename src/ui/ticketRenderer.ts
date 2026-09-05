@@ -262,7 +262,16 @@ export function buildTicketEmbed(
           (battleshipExpansionText ? `${battleshipExpansionText}\n\n` : "") +
           playerPriority,
         inline: false,
-      }
+      },
+      ...(ticket.randomized_teams
+        ? [
+            {
+              name: "Randomized Teams",
+              value: ticket.randomized_teams,
+              inline: false as const,
+            },
+          ]
+        : [])
     )
     .setFooter({
       text: "Users are prioritized by who accepted first.",
@@ -285,7 +294,9 @@ export function buildTicketButtons(ticket: MatchTicket) {
   const canStart = ticket.status === "open";
   const canClose = ticket.status === "open" || ticket.status === "started";
   const canRandomizeTeams =
-    ticket.status === "started" && modeSupportsRandomTeams(ticket.started_mode);
+    ticket.status === "started" &&
+    !ticket.randomized_teams &&
+    modeSupportsRandomTeams(ticket.started_mode);
 
   const acceptRow = new ActionRowBuilder<ButtonBuilder>();
 

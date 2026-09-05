@@ -55,6 +55,7 @@ export type MatchTicket = {
 
   lobby_code: string | null;
   game_seed: number | null;
+  randomized_teams: string | null;
   started_at: string | null;
 
   created_at: string;

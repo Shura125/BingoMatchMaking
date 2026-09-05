@@ -264,6 +264,29 @@ export async function startTicketGame(
   return true;
 }
 
+export async function setRandomizedTeams(
+  ticketId: string,
+  randomizedTeams: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("bot_match_tickets")
+    .update({
+      randomized_teams: randomizedTeams,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", ticketId)
+    .is("randomized_teams", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to save randomized teams:", error);
+    return false;
+  }
+
+  return Boolean(data);
+}
+
 export async function closeTicket(
   ticket: MatchTicket,
   newStatus: "finished" | "wasnt_played" | "cancelled"
