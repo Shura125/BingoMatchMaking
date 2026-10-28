@@ -62,7 +62,7 @@ export async function userHasActiveCasualTicketOrAcceptance(
     .select("id")
     .eq("creator_discord_id", discordId)
     .eq("matchmaking_type", "casual")
-    .eq("status", "open")
+    .in("status", activeStatuses)
     .limit(1);
 
   if (ownedError) {
@@ -88,7 +88,7 @@ export async function userHasActiveCasualTicketOrAcceptance(
     )
     .eq("discord_id", discordId)
     .eq("bot_match_tickets.matchmaking_type", "casual")
-    .eq("bot_match_tickets.status", "open")
+    .in("bot_match_tickets.status", activeStatuses)
     .limit(1);
 
   if (acceptedError) {
@@ -137,6 +137,7 @@ export async function createTicket(input: {
   creatorDiscordId: string;
   matchmakingType: MatchmakingType;
   hostIsPlayer: boolean;
+  battleshipTeamSize?: number | null;
   modes: string[];
   searchMinutes: number | null | undefined;
   scheduledAt: string | null | undefined;
@@ -163,6 +164,7 @@ export async function createTicket(input: {
       matchmaking_type: input.matchmakingType,
 
       host_is_player: input.hostIsPlayer,
+      battleship_team_size: input.modes.includes("battleship") ? input.battleshipTeamSize ?? null : null,
       scheduled_at: input.scheduledAt ?? null,
       scheduled_timezone: input.scheduledTimezone ?? null,
 
@@ -223,45 +225,19 @@ export async function addAcceptance(input: {
   discordId: string;
   acceptanceType: AcceptanceType;
 }): Promise<boolean> {
-  const { error } = await supabase.from("bot_match_ticket_acceptances").insert({
-    ticket_id: input.ticketId,
-    discord_id: input.discordId,
-    acceptance_type: input.acceptanceType,
+  return runTicketMutation('bot_join_ticket', {
+    p_ticket_id: input.ticketId, p_discord_id: input.discordId, p_acceptance_type: input.acceptanceType,
   });
-
-  if (error) {
-    console.error("Failed to add acceptance:", error);
-    return false;
-  }
-
-  return true;
 }
 
-export async function startTicketGame(
-  ticketId: string,
-  startedMode: GameModeId
-): Promise<boolean> {
+export async function startTicketGame(ticketId: string, startedMode: GameModeId): Promise<boolean> {
   const mode = getGameMode(startedMode);
-
-  const { error } = await supabase
-    .from("bot_match_tickets")
-    .update({
-      status: "started",
-      started_mode: startedMode,
-      lobby_code: mode?.usesLobbyCode ? generateLobbyCode() : null,
-      game_seed: mode?.usesGameSeed ? generateGameSeed() : null,
-      started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", ticketId)
-    .eq("status", "open");
-
-  if (error) {
-    console.error("Failed to start ticket:", error);
-    return false;
-  }
-
-  return true;
+  if (!mode) return false;
+  return runTicketMutation('bot_start_ticket', {
+    p_ticket_id: ticketId, p_mode: startedMode,
+    p_lobby_code: mode.usesLobbyCode ? generateLobbyCode() : null,
+    p_game_seed: mode.usesGameSeed ? generateGameSeed() : null,
+  });
 }
 
 export async function setRandomizedTeams(
@@ -275,6 +251,7 @@ export async function setRandomizedTeams(
       updated_at: new Date().toISOString(),
     })
     .eq("id", ticketId)
+    .eq("status", "started")
     .is("randomized_teams", null)
     .select("id")
     .maybeSingle();
@@ -287,113 +264,21 @@ export async function setRandomizedTeams(
   return Boolean(data);
 }
 
-export async function closeTicket(
-  ticket: MatchTicket,
-  newStatus: "finished" | "wasnt_played" | "cancelled"
-): Promise<boolean> {
-  const { error } = await supabase
-    .from("bot_match_tickets")
-    .update({
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", ticket.id);
-
+async function runTicketMutation(name: string, args: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await supabase.rpc(name, args);
   if (error) {
-    console.error("Failed to close ticket:", error);
+    console.error(`Ticket operation ${name} failed:`, error);
     return false;
   }
+  return data === true;
+}
 
-  if (newStatus !== "finished") {
-    return true;
-  }
-
-  const acceptances = await getAcceptances(ticket.id);
-
-  const playerAcceptances = acceptances.filter(
-    (acceptance) => acceptance.acceptance_type === "player"
-  );
-
-  const refAcceptances = acceptances.filter(
-    (acceptance) => acceptance.acceptance_type === "ref"
-  );
-
-  const firstRef = refAcceptances[0];
-
-  const player1DiscordId = ticket.host_is_player
-    ? ticket.creator_discord_id
-    : playerAcceptances[0]?.discord_id;
-
-  const player2DiscordId = ticket.host_is_player
-    ? playerAcceptances[0]?.discord_id ?? null
-    : playerAcceptances[1]?.discord_id ?? null;
-
-  if (!player1DiscordId) {
-    console.error("Cannot create match because player1 is missing.");
-    return true;
-  }
-
-  const { data: matchData, error: matchError } = await supabase
-    .from("bot_matches")
-    .insert({
-      ticket_id: ticket.id,
-      guild_id: ticket.guild_id,
-
-      matchmaking_type: ticket.matchmaking_type,
-      started_mode: ticket.started_mode,
-
-      player1_discord_id: player1DiscordId,
-      player2_discord_id: player2DiscordId,
-      ref_discord_id: firstRef?.discord_id ?? null,
-
-      veilbreak: ticket.veilbreak,
-      base_game: ticket.base_game,
-      scadubingo: ticket.scadubingo,
-      legacy_dungeons: ticket.legacy_dungeons,
-      cluedo: ticket.cluedo,
-      battleship: ticket.battleship,
-
-      status: "finished",
-      finished_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  if (matchError || !matchData) {
-    console.error("Ticket was closed, but match insert failed:", matchError);
-    return true;
-  }
-
-  const participantRows = [
-    {
-      match_id: matchData.id,
-      discord_id: ticket.creator_discord_id,
-      participant_role: ticket.host_is_player ? "host_player" : "host",
-    },
-    ...playerAcceptances.map((acceptance) => ({
-      match_id: matchData.id,
-      discord_id: acceptance.discord_id,
-      participant_role: "player",
-    })),
-    ...refAcceptances.map((acceptance) => ({
-      match_id: matchData.id,
-      discord_id: acceptance.discord_id,
-      participant_role: "ref",
-    })),
-  ];
-
-  const { error: participantError } = await supabase
-    .from("bot_match_participants")
-    .insert(participantRows);
-
-  if (participantError) {
-    console.error(
-      "Match was created, but participants insert failed:",
-      participantError
-    );
-  }
-
-  return true;
+export async function closeTicket(
+  ticket: MatchTicket,
+  newStatus: 'finished' | 'cancelled'
+): Promise<boolean> {
+  if (!['finished', 'cancelled'].includes(newStatus)) return false;
+  return runTicketMutation('bot_close_ticket', { p_ticket_id: ticket.id, p_status: newStatus });
 }
 
 export async function findActiveOwnedTicket(
@@ -481,36 +366,11 @@ export async function findActiveTicketForUser(discordId: string): Promise<{
 }
 
 export async function leaveAcceptedTicket(discordId: string): Promise<{
-  success: boolean;
-  ticket: MatchTicket | null;
+  success: boolean; ticket: MatchTicket | null;
 }> {
   const ticket = await findActiveAcceptedTicket(discordId);
-
-  if (!ticket) {
-    return {
-      success: false,
-      ticket: null,
-    };
-  }
-
-  const { error } = await supabase
-    .from("bot_match_ticket_acceptances")
-    .delete()
-    .eq("ticket_id", ticket.id)
-    .eq("discord_id", discordId);
-
-  if (error) {
-    console.error("Failed to leave accepted ticket:", error);
-    return {
-      success: false,
-      ticket,
-    };
-  }
-
-  return {
-    success: true,
-    ticket,
-  };
+  if (!ticket) return { success: false, ticket: null };
+  return { success: await leaveSpecificTicket(ticket.id, discordId), ticket };
 }
 
 export async function getStartedTicketsPastLimit(
@@ -568,39 +428,11 @@ export async function getExpiredTicketsReadyToDelete(): Promise<MatchTicket[]> {
 }
 
 export async function expireTicket(ticketId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from("bot_match_tickets")
-    .update({
-      status: "expired",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", ticketId)
-    .eq("status", "open");
-
-  if (error) {
-    console.error("Failed to expire ticket:", error);
-    return false;
-  }
-
-  return true;
+  return runTicketMutation('bot_close_ticket', { p_ticket_id: ticketId, p_status: 'expired' });
 }
 
-export async function leaveSpecificTicket(
-  ticketId: string,
-  discordId: string
-): Promise<boolean> {
-  const { error } = await supabase
-    .from("bot_match_ticket_acceptances")
-    .delete()
-    .eq("ticket_id", ticketId)
-    .eq("discord_id", discordId);
-
-  if (error) {
-    console.error("Failed to leave ticket:", error);
-    return false;
-  }
-
-  return true;
+export async function leaveSpecificTicket(ticketId: string, discordId: string): Promise<boolean> {
+  return runTicketMutation('bot_leave_ticket', { p_ticket_id: ticketId, p_discord_id: discordId });
 }
 
 export async function getRecentMatches(limit = 10): Promise<MatchRecord[]> {
@@ -621,22 +453,10 @@ export async function getRecentMatches(limit = 10): Promise<MatchRecord[]> {
 
 export async function forceSetTicketStatus(
   ticketId: string,
-  status: "finished" | "wasnt_played" | "cancelled" | "expired"
+  status: 'finished' | 'cancelled' | 'expired'
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from("bot_match_tickets")
-    .update({
-      status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", ticketId);
-
-  if (error) {
-    console.error("Failed to force set ticket status:", error);
-    return false;
-  }
-
-  return true;
+  if (!['finished', 'cancelled', 'expired'].includes(status)) return false;
+  return runTicketMutation('bot_close_ticket', { p_ticket_id: ticketId, p_status: status });
 }
 
 export async function getOpenMatchTickets(): Promise<MatchTicket[]> {

@@ -3,7 +3,6 @@ import {
   GameModeId,
   getGameMode,
   getGameModeLabel,
-  getHighestMaxPlayersForTicket,
   getRequiredAcceptedPlayersForMode,
   getTicketModeIds,
 } from "../gameModes";
@@ -38,17 +37,31 @@ export function getMaxAcceptedPlayers(ticket: MatchTicket): number {
 }
 
 export function getTotalRequiredPlayers(ticket: MatchTicket): number {
+  const startedMode = getGameMode(ticket.started_mode);
+  if (startedMode) return getAllowedPlayerCounts(ticket, startedMode.id)[0];
+
   const selectedModes = getTicketModeIds(ticket)
     .map((modeId) => getGameMode(modeId))
     .filter((mode) => mode !== null);
 
   if (selectedModes.length === 0) return 2;
 
-  return Math.max(...selectedModes.map((mode) => mode.totalPlayers));
+  return Math.max(...selectedModes.map((mode) => getAllowedPlayerCounts(ticket, mode.id)[0]));
 }
 
 export function getMaxTotalPlayers(ticket: MatchTicket): number {
-  return getHighestMaxPlayersForTicket(ticket);
+  const startedMode = getGameMode(ticket.started_mode);
+  if (startedMode) return Math.max(...getAllowedPlayerCounts(ticket, startedMode.id));
+
+  const modes = getTicketModeIds(ticket);
+  return modes.length ? Math.max(...modes.map(id => Math.max(...getAllowedPlayerCounts(ticket, id)))) : 2;
+}
+
+export function getAllowedPlayerCounts(ticket: MatchTicket, modeId: GameModeId): readonly number[] {
+  if (modeId === 'battleship' && [3, 4, 5].includes(ticket.battleship_team_size ?? 0)) {
+    return [ticket.battleship_team_size! * 2];
+  }
+  return getGameMode(modeId)?.allowedPlayerCounts ?? [];
 }
 
 export function getCurrentPlayerCount(
@@ -69,26 +82,33 @@ export function getPlayerAcceptances(
 }
 
 export function getPlayerRequirementText(ticket: MatchTicket): string {
-  const totalRequiredPlayers = getTotalRequiredPlayers(ticket);
-  const maxPlayers = getMaxTotalPlayers(ticket);
-  const acceptedPlayers = getRequiredAcceptedPlayers(ticket);
-  const maxAcceptedPlayers = getMaxAcceptedPlayers(ticket);
+  const modeIds = ticket.started_mode && getGameMode(ticket.started_mode)
+    ? [ticket.started_mode]
+    : getTicketModeIds(ticket);
+  const requirements = modeIds.map((modeId) => {
+    const mode = getGameMode(modeId)!;
+    return `${mode.label}: exactly ${getAllowedPlayerCounts(ticket, mode.id).join(" or ")} total players.`;
+  });
 
-  if (maxPlayers > totalRequiredPlayers) {
-    return ticket.host_is_player
-      ? `This ticket needs ${totalRequiredPlayers} total players to start and can hold up to ${maxPlayers}: host + up to ${maxAcceptedPlayers} accepted players.`
-      : `This ticket needs ${acceptedPlayers} accepted players to start and can hold up to ${maxAcceptedPlayers} accepted players.`;
-  }
+  return [
+    ...requirements,
+    ticket.host_is_player
+      ? "The host counts as one player; refs do not count."
+      : "The host is only organizing; refs do not count as players.",
+  ].join("\n");
+}
 
-  if (ticket.host_is_player) {
-    return `This ticket requires exactly ${totalRequiredPlayers} total players: host + ${acceptedPlayers} accepted player${
-      acceptedPlayers === 1 ? "" : "s"
-    }.`;
-  }
-
-  return `This ticket requires exactly ${acceptedPlayers} accepted player${
-    acceptedPlayers === 1 ? "" : "s"
-  } because the host is not playing.`;
+export function canStartModeWithPlayers(
+  ticket: MatchTicket,
+  modeId: GameModeId,
+  acceptances: MatchTicketAcceptance[]
+): boolean {
+  const mode = getGameMode(modeId);
+  return Boolean(
+    mode &&
+    getTicketModeIds(ticket).includes(modeId) &&
+    getAllowedPlayerCounts(ticket, modeId).includes(getCurrentPlayerCount(ticket, acceptances))
+  );
 }
 
 export function getStartModeLabel(startedMode: string | null): string {
@@ -99,37 +119,14 @@ export function getStartModeOptionsForTicket(
   ticket: MatchTicket,
   acceptances: MatchTicketAcceptance[]
 ): StartModeResult {
-  const playerAcceptances = getPlayerAcceptances(acceptances);
-  const acceptedCount = playerAcceptances.length;
-
   const selectedModeIds = getTicketModeIds(ticket);
   const availableOptions = selectedModeIds.map((modeId) => ({
     mode: modeId,
     label: getGameModeLabel(modeId),
   }));
 
-  // Competitive stays strict.
-  if (ticket.matchmaking_type === "competitive") {
-    const requiredAcceptedPlayers = getRequiredAcceptedPlayers(ticket);
-    const competitiveMode = selectedModeIds[0] ?? null;
-
-    return {
-      canStart: acceptedCount === requiredAcceptedPlayers,
-      autoStartMode: competitiveMode,
-      options: [],
-      requiredAcceptedPlayers,
-      message:
-        acceptedCount === requiredAcceptedPlayers
-          ? "Ready to start."
-          : `Competitive requires exactly ${requiredAcceptedPlayers} accepted player${
-              requiredAcceptedPlayers === 1 ? "" : "s"
-            }.`,
-    };
-  }
-
   const startableOptions = availableOptions.filter(
-    (option) =>
-      acceptedCount >= getRequiredAcceptedPlayersForMode(ticket, option.mode)
+    (option) => canStartModeWithPlayers(ticket, option.mode, acceptances)
   );
 
   if (startableOptions.length > 0) {
@@ -164,8 +161,6 @@ export function getStartModeOptionsForTicket(
     autoStartMode: null,
     options: [],
     requiredAcceptedPlayers: nextRequiredAcceptedPlayers,
-    message: `This ticket requires ${nextRequiredAcceptedPlayers} accepted player${
-      nextRequiredAcceptedPlayers === 1 ? "" : "s"
-    } before starting.`,
+    message: `The current roster does not fit a selected mode.\n${getPlayerRequirementText(ticket)}`,
   };
 }

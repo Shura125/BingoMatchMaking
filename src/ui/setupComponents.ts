@@ -75,6 +75,19 @@ export function buildMatchDetailsButtons() {
   );
 }
 
+export function buildBattleshipSizeSelect() {
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder().setCustomId('mm_battleship_size')
+      .setPlaceholder('Choose a Battleship roster size').setMinValues(1).setMaxValues(1)
+      .addOptions(
+        { label: 'Flexible: 3v3, 4v4, or 5v5', value: '0', description: 'Notify when 3v3 is ready; the host can keep recruiting.' },
+        { label: '3v3', value: '3', description: 'Fill exactly six players.' },
+        { label: '4v4', value: '4', description: 'Fill exactly eight players.' },
+        { label: '5v5', value: '5', description: 'Fill exactly ten players.' }
+      )
+  );
+}
+
 export function buildMatchDetailsModal() {
   return new ModalBuilder()
     .setCustomId("mm_match_details_modal")

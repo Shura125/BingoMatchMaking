@@ -10,6 +10,7 @@ import { modesIncludeCasualGameModes } from "../gameModes";
 import { MatchmakingCategory, MatchmakingType, PendingSession } from "../types";
 import {
   buildCasualTimingButtons,
+  buildBattleshipSizeSelect,
   buildCompetitiveHostRoleButtons,
   buildCreateTicketButton,
   buildDurationSelect,
@@ -21,7 +22,7 @@ import {
 } from "../ui/setupComponents";
 import {
   buildTicketButtons,
-  buildTicketEmbed,
+  buildTicketEmbedForClient,
   getDurationText,
   getSessionModeNames,
 } from "../ui/ticketRenderer";
@@ -116,12 +117,32 @@ export async function handleModeSelect(interaction: StringSelectMenuInteraction)
   const session = pendingSessions.get(interaction.user.id) ?? {};
 
   session.modes = interaction.values;
+  session.battleshipTeamSize = null;
   pendingSessions.set(interaction.user.id, session);
+
+  if (session.modes.includes('battleship')) {
+    await interaction.update({ content: 'Choose the Battleship roster size. Flexible can start at 3v3 and expand before starting.', components: [buildBattleshipSizeSelect()] });
+    return;
+  }
 
   await interaction.update({
     content:
       `Selected modes: **${getSessionModeNames(session.modes)}**\n\n` +
       "Would you like to add a title or details for this match?",
+    components: [buildMatchDetailsButtons()],
+  });
+}
+
+export async function handleBattleshipSizeSelect(interaction: StringSelectMenuInteraction) {
+  const session = pendingSessions.get(interaction.user.id);
+  const size = Number(interaction.values[0]);
+  if (!session?.modes?.includes('battleship') || ![0,3,4,5].includes(size)) {
+    await interaction.reply({ content: 'Your setup expired. Run /creatematch again.', ephemeral: true });
+    return;
+  }
+  session.battleshipTeamSize = size || null;
+  await interaction.update({
+    content: `Battleship: **${size ? `${size}v${size}` : 'Flexible 3v3 / 4v4 / 5v5'}**. Would you like to add match details?`,
     components: [buildMatchDetailsButtons()],
   });
 }
@@ -397,7 +418,7 @@ export async function handleCreateTicket(
   if (alreadyActive) {
     await interaction.editReply({
       content:
-        "You already have an active matchmaking ticket, or you accepted a ticket that is still active. Finish, cancel, leave, or mark that ticket as wasn't played before creating another one.",
+        "You already have an active matchmaking ticket, or you accepted a ticket that is still active. Finish, cancel, or leave that ticket before creating another one.",
       components: [],
     });
     return;
@@ -420,6 +441,7 @@ export async function handleCreateTicket(
     creatorDiscordId: interaction.user.id,
     matchmakingType: session.matchmakingType,
     hostIsPlayer: session.hostIsPlayer ?? true,
+    battleshipTeamSize: session.battleshipTeamSize ?? null,
     modes: session.modes,
     searchMinutes:
       session.matchmakingType === "casual" && !session.scheduledAt
@@ -443,7 +465,7 @@ export async function handleCreateTicket(
 
   const sentMessage = await channel.send({
     content: roleId ? `<@&${roleId}>` : undefined,
-    embeds: [buildTicketEmbed(ticket, [])],
+    embeds: [await buildTicketEmbedForClient(client, ticket, [])],
     components: buildTicketButtons(ticket),
     allowedMentions: {
       roles: roleId ? [roleId] : [],

@@ -5,6 +5,7 @@ import { registerCommands } from "./commands/registerCommands";
 import { handleChatInputCommand } from "./handlers/commandHandler";
 import {
   handleAddMatchDetailsButton,
+  handleBattleshipSizeSelect,
   handleCasualTimingButton,
   handleCompetitiveHostRoleButton,
   handleCreateTicket,
@@ -27,6 +28,8 @@ import {
   handleStartGameAsMode,
 } from "./handlers/ticketHandlers";
 import { startExpireTicketsJob } from "./jobs/expireTickets";
+import { getGameModeEmojis } from "./utils/gameModeEmojis";
+import { handleAlertParticipants } from "./handlers/participantAlertHandler";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -98,6 +101,11 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.customId === "mm_create_ticket") {
         await handleCreateTicket(client, interaction);
+        return;
+      }
+
+      if (interaction.customId.startsWith("ticket_alert_participants_")) {
+        await handleAlertParticipants(interaction, interaction.customId.replace("ticket_alert_participants_", ""));
         return;
       }
 
@@ -184,6 +192,10 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'mm_battleship_size') {
+        await handleBattleshipSizeSelect(interaction);
+        return;
+      }
       if (interaction.customId === "mm_modes") {
         await handleModeSelect(interaction);
         return;
@@ -251,6 +263,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 async function main() {
+  getGameModeEmojis();
   await registerCommands();
   await client.login(config.discordToken);
 }

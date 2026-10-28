@@ -41,7 +41,7 @@ export async function handleForceCloseCommand(
 
   const ticket = await fetchTicket(ticketId);
 
-  if (!ticket) {
+  if (!ticket || ticket.guild_id !== interaction.guildId) {
     await interaction.reply({
       content: "Could not find that ticket.",
       ephemeral: true,
@@ -84,7 +84,7 @@ export async function handleRemovePlayerCommand(
 
   const ticket = await fetchTicket(ticketId);
 
-  if (!ticket) {
+  if (!ticket || ticket.guild_id !== interaction.guildId) {
     await interaction.reply({
       content: "Could not find that ticket.",
       ephemeral: true,
@@ -97,6 +97,11 @@ export async function handleRemovePlayerCommand(
       content: "You cannot remove the host with this command. Force close the ticket instead.",
       ephemeral: true,
     });
+    return;
+  }
+
+  if (ticket.status !== 'open') {
+    await interaction.reply({ content: 'Only open queues can be edited. Started match rosters stay fixed.', ephemeral: true });
     return;
   }
 

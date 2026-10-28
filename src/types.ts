@@ -6,7 +6,6 @@ export type TicketStatus =
   | "open"
   | "started"
   | "finished"
-  | "wasnt_played"
   | "cancelled"
   | "expired";
 
@@ -14,6 +13,7 @@ export type PendingSession = {
   matchmakingType?: MatchmakingType;
   matchmakingCategory?: MatchmakingCategory;
   hostIsPlayer?: boolean;
+  battleshipTeamSize?: number | null;
   modes?: string[];
   searchMinutes?: number | null;
 
@@ -29,6 +29,7 @@ export type MatchTicket = {
   guild_id: string;
   channel_id: string;
   message_id: string | null;
+  participants_alert_requested_at?: string | null;
 
   matchmaking_type: MatchmakingType;
   creator_discord_id: string;
@@ -42,20 +43,25 @@ export type MatchTicket = {
   started_mode: string | null;
 
   veilbreak: boolean;
+  conquest: boolean;
+  legacy_bingo: boolean;
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
   cluedo: boolean;
+  ringus: boolean;
   battleship: boolean;
 
   search_minutes: number | null;
   expires_at: string | null;
 
-  status: TicketStatus;
+  // Retain read compatibility with historical rows; new closes cannot use it.
+  status: TicketStatus | "wasnt_played";
 
   lobby_code: string | null;
   game_seed: number | null;
   randomized_teams: string | null;
+  battleship_team_size: number | null;
   started_at: string | null;
 
   created_at: string;
@@ -81,12 +87,18 @@ export type MatchRecord = {
   player1_discord_id: string;
   player2_discord_id: string | null;
   ref_discord_id: string | null;
+  battleship_team_size: number | null;
+  randomized_teams: string | null;
+  bot_match_participants?: { discord_id: string; participant_role: string }[];
 
   veilbreak: boolean;
+  conquest: boolean;
+  legacy_bingo: boolean;
   base_game: boolean;
   scadubingo: boolean;
   legacy_dungeons: boolean;
   cluedo: boolean;
+  ringus: boolean;
   battleship: boolean;
 
   status: string;

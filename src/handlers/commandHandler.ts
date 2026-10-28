@@ -2,14 +2,11 @@ import {
   ChatInputCommandInteraction,
   Client,
   ChannelType,
-  Message,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ComponentType,
 } from "discord.js";
 import { buildTypeButtons } from "../ui/setupComponents";
 import {
   GameModeId,
+  GameModeFlags,
   getGameModeForCommand,
   getGameModeLabel,
   getTicketModeNames as getModeNamesForFlags,
@@ -33,31 +30,17 @@ import {
 import { config } from "../config";
 import {
   buildTicketButtons,
-  buildTicketEmbed,
+  buildTicketEmbedForClient,
 } from "../ui/ticketRenderer";
 import { deleteTicketMessage } from "../utils/ticketCleanup";
 
-function getMatchModeNames(match: {
-  veilbreak: boolean;
-  base_game: boolean;
-  scadubingo: boolean;
-  legacy_dungeons: boolean;
-  cluedo: boolean;
-  battleship: boolean;
-}): string {
+function getMatchModeNames(match: GameModeFlags): string {
   const modeNames = getModeNamesForFlags(match).replace("None", "Unknown");
 
   return modeNames;
 }
 
-function formatTicketModeNames(ticket: {
-  veilbreak: boolean;
-  base_game: boolean;
-  scadubingo: boolean;
-  legacy_dungeons: boolean;
-  cluedo: boolean;
-  battleship: boolean;
-}): string {
+function formatTicketModeNames(ticket: GameModeFlags): string {
   return getModeNamesForFlags(ticket).replace("None", "Unknown");
 }
 
@@ -71,19 +54,13 @@ function getTicketJumpUrlFromParts(ticket: {
   return `https://discord.com/channels/${ticket.guild_id}/${ticket.channel_id}/${ticket.message_id}`;
 }
 
-function formatOpenTicketLine(ticket: {
+function formatOpenTicketLine(ticket: GameModeFlags & {
   guild_id: string;
   channel_id: string;
   message_id: string | null;
   creator_discord_id: string;
   matchmaking_type: string;
   status: string;
-  veilbreak: boolean;
-  base_game: boolean;
-  scadubingo: boolean;
-  legacy_dungeons: boolean;
-  cluedo: boolean;
-  battleship: boolean;
   created_at: string;
 }): string {
   const ticketUrl = getTicketJumpUrlFromParts(ticket);
@@ -100,17 +77,11 @@ function formatOpenTicketLine(ticket: {
   );
 }
 
-function formatRecentMatchLine(match: {
+function formatRecentMatchLine(match: GameModeFlags & {
   matchmaking_type: string;
   player1_discord_id: string;
   player2_discord_id: string | null;
   ref_discord_id: string | null;
-  veilbreak: boolean;
-  base_game: boolean;
-  scadubingo: boolean;
-  legacy_dungeons: boolean;
-  cluedo: boolean;
-  battleship: boolean;
   finished_at: string | null;
 }): string {
   const player2 = match.player2_discord_id
@@ -131,82 +102,6 @@ function formatRecentMatchLine(match: {
     `Finished: ${finishedDate}` +
     ref
   );
-}
-
-function disableMessageButtons(message: Message) {
-  return message.components
-    .filter((row) => row.type === ComponentType.ActionRow)
-    .map((row) => {
-      const newRow = new ActionRowBuilder<ButtonBuilder>();
-
-      for (const component of row.components) {
-        if (component.type !== ComponentType.Button) continue;
-
-        const button = ButtonBuilder.from(component).setDisabled(true);
-        newRow.addComponents(button);
-      }
-
-      return newRow;
-    });
-}
-
-async function markTicketMessageExpired(message: Message) {
-  const disabledRows = disableMessageButtons(message);
-
-  await message.edit({
-    content: "⏰ This matchmaking ticket expired because the search time ended.",
-    components: disabledRows,
-  });
-}
-
-function scheduleTicketExpiration(options: {
-  client: Client;
-  message: Message;
-  ticketId: string;
-  creatorDiscordId: string;
-  searchMinutes: number;
-  deleteAfterMs?: number;
-}) {
-  const {
-    client,
-    message,
-    ticketId,
-    creatorDiscordId,
-    searchMinutes,
-    deleteAfterMs = 5 * 60 * 1000,
-  } = options;
-
-  setTimeout(async () => {
-    try {
-      const { ticket } = await findActiveTicketForUser(creatorDiscordId);
-
-      if (!ticket) return;
-      if (ticket.id !== ticketId) return;
-
-      if (ticket.status !== "open") return;
-
-      const success = await closeTicket(ticket, "cancelled");
-
-      if (!success) {
-        console.error(`Failed to expire ticket ${ticketId}`);
-        return;
-      }
-
-      await refreshTicketMessage(client, ticketId);
-
-      const freshMessage = await message.fetch().catch(() => null);
-
-      if (freshMessage) {
-        await markTicketMessageExpired(freshMessage);
-
-        setTimeout(async () => {
-          await freshMessage.delete().catch(() => {});
-        }, deleteAfterMs);
-      }
-    } catch (error) {
-      console.error(`Failed to run expiration for ticket ${ticketId}:`, error);
-    }
-  }, searchMinutes * 60 * 1000);
 }
 
 function getRoleIdForQuickMode(mode: GameModeId): string {
@@ -284,7 +179,7 @@ async function createQuickCasualTicket(
 
   const sentMessage = await channel.send({
     content: `<@&${roleId}>`,
-    embeds: [buildTicketEmbed(ticket, [])],
+    embeds: [await buildTicketEmbedForClient(client, ticket, [])],
     components: buildTicketButtons(ticket),
     allowedMentions: {
       roles: [roleId],
@@ -292,15 +187,6 @@ async function createQuickCasualTicket(
   });
 
   await updateTicketMessageId(ticket.id, sentMessage.id);
-
-  scheduleTicketExpiration({
-    client,
-    message: sentMessage,
-    ticketId: ticket.id,
-    creatorDiscordId: interaction.user.id,
-    searchMinutes,
-    deleteAfterMs: 5 * 60 * 1000,
-  });
 
   await interaction.editReply({
     content: `Created a **casual ${modeLabel}** matchmaking ticket searching for **1 hour** in <#${channelId}>.`,
@@ -418,7 +304,7 @@ export async function handleChatInputCommand(
 
     if (!result.success || !result.ticket) {
       await interaction.reply({
-        content: "You are not currently queued on another user's active ticket.",
+        content: "You can only leave an open queue. Started match rosters stay fixed.",
         ephemeral: true,
       });
       return;

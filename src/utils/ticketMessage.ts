@@ -1,6 +1,6 @@
 import { ChannelType, Client } from "discord.js";
 import { fetchTicket, getAcceptances } from "../services/ticketService";
-import { buildTicketButtons, buildTicketEmbed } from "../ui/ticketRenderer";
+import { buildTicketButtons, buildTicketEmbedForClient } from "../ui/ticketRenderer";
 import { MatchTicket } from "../types";
 
 export function getTicketJumpUrl(ticket: MatchTicket): string | null {
@@ -29,8 +29,8 @@ export async function refreshTicketMessage(
   const message = await channel.messages.fetch(ticket.message_id);
 
   await message.edit({
-    embeds: [buildTicketEmbed(ticket, acceptances)],
-    components: buildTicketButtons(ticket),
+    embeds: [await buildTicketEmbedForClient(client, ticket, acceptances)],
+    components: buildTicketButtons(ticket, acceptances),
   });
 
   return true;

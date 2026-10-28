@@ -3,12 +3,12 @@ import {
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
+  MessageFlags,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
 } from "discord.js";
 import {
   GameModeId,
-  getRequiredAcceptedPlayersForMode,
   modeSupportsRandomTeams,
   ticketHasMode,
 } from "../gameModes";
@@ -27,59 +27,30 @@ import {
   getPlayerAcceptances,
   getPlayerRequirementText,
   getMaxAcceptedPlayers,
-  getRequiredAcceptedPlayers,
   getStartModeLabel,
   getStartModeOptionsForTicket,
+  canStartModeWithPlayers,
 } from "../utils/playerLimits";
-import { buildTicketButtons, buildTicketEmbed } from "../ui/ticketRenderer";
+import { buildTicketButtons, buildTicketEmbedForClient } from "../ui/ticketRenderer";
+import { refreshTicketMessage } from "../utils/ticketMessage";
 import { deleteTicketMessage } from "../utils/ticketCleanup";
+import { getPlayerDisplayName, resolveTicketPlayerNames } from "../utils/playerNames";
+import { canRandomizeTeamRoster, formatRandomizedTeams } from "../utils/teams";
 
-async function renderTicketMessage(ticketId: string) {
-  const ticket = await fetchTicket(ticketId);
-  if (!ticket) return null;
-
-  const acceptances = await getAcceptances(ticket.id);
-
-  return {
-    embeds: [buildTicketEmbed(ticket, acceptances)],
-    components: buildTicketButtons(ticket),
-  };
-}
-
-function shufflePlayers(players: string[]): string[] {
-  const shuffled = [...players];
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    const currentPlayer = shuffled[index];
-
-    shuffled[index] = shuffled[swapIndex];
-    shuffled[swapIndex] = currentPlayer;
-  }
-
-  return shuffled;
-}
-
-function getTeamSizeLabel(startedMode: string | null, playerCount: number): string {
-  if (startedMode === "battleship") {
-    return `${playerCount / 2}v${playerCount / 2}`;
-  }
-
-  return "2v2";
-}
-
-function formatRandomizedTeams(players: string[], startedMode: string | null) {
-  const shuffledPlayers = shufflePlayers(players);
-  const half = Math.ceil(shuffledPlayers.length / 2);
-  const teamOne = shuffledPlayers.slice(0, half);
-  const teamTwo = shuffledPlayers.slice(half);
-  const teamSizeLabel = getTeamSizeLabel(startedMode, shuffledPlayers.length);
-
-  return (
-    `**${getStartModeLabel(startedMode)} ${teamSizeLabel}**\n\n` +
-    `**Team 1**\n${teamOne.map((discordId) => `<@${discordId}>`).join("\n")}\n\n` +
-    `**Team 2**\n${teamTwo.map((discordId) => `<@${discordId}>`).join("\n")}`
-  );
+async function completeTicketAction(interaction: ButtonInteraction | StringSelectMenuInteraction, ticketId: string, notice: string) {
+  if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate();
+  try {
+    if (!interaction.message.flags.has(MessageFlags.Ephemeral)) {
+      const ticket = await fetchTicket(ticketId);
+      if (ticket) {
+        const acceptances = await getAcceptances(ticketId);
+        await interaction.editReply({ embeds: [await buildTicketEmbedForClient(interaction.client, ticket, acceptances)], components: buildTicketButtons(ticket, acceptances) });
+        return;
+      }
+    } else await interaction.editReply({ content: notice, embeds: [], components: [] });
+    if (await refreshTicketMessage(interaction.client, ticketId)) return;
+  } catch (error) { console.error('Failed to refresh public ticket:', error); }
+  await interaction.followUp({ content: 'Your action was saved, but the shared ticket could not refresh. Please contact an admin.', ephemeral: true });
 }
 
 export async function handleAcceptTicket(
@@ -87,10 +58,11 @@ export async function handleAcceptTicket(
   ticketId: string,
   acceptanceType: AcceptanceType
 ) {
+  await interaction.deferUpdate();
   const ticket = await fetchTicket(ticketId);
 
   if (!ticket) {
-    await interaction.reply({
+    await interaction.followUp({
       content: "This ticket no longer exists.",
       ephemeral: true,
     });
@@ -98,7 +70,7 @@ export async function handleAcceptTicket(
   }
 
   if (ticket.status !== "open") {
-    await interaction.reply({
+    await interaction.followUp({
       content: "This ticket is no longer open.",
       ephemeral: true,
     });
@@ -106,7 +78,7 @@ export async function handleAcceptTicket(
   }
 
   if (ticket.creator_discord_id === interaction.user.id) {
-    await interaction.reply({
+    await interaction.followUp({
       content: "You cannot accept your own matchmaking ticket.",
       ephemeral: true,
     });
@@ -119,7 +91,7 @@ export async function handleAcceptTicket(
     );
 
     if (alreadyActiveCasual) {
-      await interaction.reply({
+      await interaction.followUp({
         content:
           "You already have an active casual matchmaking ticket, or you accepted another casual ticket that is still active.",
         ephemeral: true,
@@ -134,7 +106,7 @@ export async function handleAcceptTicket(
   );
 
   if (alreadyAccepted) {
-    await interaction.reply({
+    await interaction.followUp({
       content: "You are already on this ticket.",
       ephemeral: true,
     });
@@ -148,7 +120,7 @@ export async function handleAcceptTicket(
     acceptanceType === "player" &&
     playerAcceptances.length >= maxAcceptedPlayers
   ) {
-    await interaction.reply({
+    await interaction.followUp({
       content:
         `This ticket already has the maximum number of players.\n\n` +
         getPlayerRequirementText(ticket),
@@ -164,24 +136,14 @@ export async function handleAcceptTicket(
   });
 
   if (!success) {
-    await interaction.reply({
+    await interaction.followUp({
       content: "Could not accept this ticket.",
       ephemeral: true,
     });
     return;
   }
 
-  const rendered = await renderTicketMessage(ticketId);
-
-  if (!rendered) {
-    await interaction.reply({
-      content: "Accepted, but failed to refresh the ticket message.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.update(rendered);
+  await completeTicketAction(interaction, ticketId, acceptanceType === "ref" ? "You joined as a referee." : "You joined the match.");
 }
 
 export async function handleRemovePlayerButton(
@@ -224,6 +186,7 @@ export async function handleRemovePlayerButton(
     return;
   }
 
+  const names = await resolveTicketPlayerNames(interaction.client, ticket, acceptances);
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`ticket_remove_select_${ticket.id}`)
     .setPlaceholder("Choose someone to remove")
@@ -233,8 +196,8 @@ export async function handleRemovePlayerButton(
       acceptances.slice(0, 25).map((acceptance) => ({
         label:
           acceptance.acceptance_type === "ref"
-            ? `Ref - ${acceptance.discord_id}`
-            : `Player - ${acceptance.discord_id}`,
+            ? `Ref - ${getPlayerDisplayName(acceptance.discord_id, names)}`
+            : `Player - ${getPlayerDisplayName(acceptance.discord_id, names)}`,
         value: acceptance.discord_id,
         description:
           acceptance.acceptance_type === "ref"
@@ -294,30 +257,7 @@ export async function handleRemovePlayerSelect(
     return;
   }
 
-  const rendered = await renderTicketMessage(ticketId);
-
-  if (!rendered) {
-    await interaction.reply({
-      content: "Player removed, but the public ticket could not refresh.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.update({
-    content: `Removed <@${discordIdToRemove}> from the ticket.`,
-    components: [],
-  });
-
-  try {
-    const publicMessage = await interaction.channel?.messages.fetch(
-      ticket.message_id ?? ""
-    );
-
-    await publicMessage?.edit(rendered);
-  } catch (error) {
-    console.error("Failed to refresh public ticket after removing player:", error);
-  }
+  await completeTicketAction(interaction, ticketId, "Removed the selected player/ref from the ticket.");
 }
 
 export async function handleStartGame(
@@ -379,32 +319,26 @@ export async function handleStartGame(
       return;
     }
 
-    const rendered = await renderTicketMessage(ticketId);
-
-    if (!rendered) {
-      await interaction.reply({
-        content: "Game started, but failed to refresh the ticket.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    await interaction.update(rendered);
+    await completeTicketAction(interaction, ticketId, "Match started. The two-hour auto-finish timer is running.");
     return;
   }
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    ...startModeResult.options.map((option) =>
-      new ButtonBuilder()
-        .setCustomId(`ticket_start_as_${option.mode}_${ticket.id}`)
-        .setLabel(`Start as ${option.label}`)
-        .setStyle(ButtonStyle.Primary)
-    )
+  const buttons = startModeResult.options.map((option) =>
+    new ButtonBuilder()
+      .setCustomId(`ticket_start_as_${option.mode}_${ticket.id}`)
+      .setLabel(`Start as ${option.label}`)
+      .setStyle(ButtonStyle.Primary)
   );
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (let index = 0; index < buttons.length; index += 5) {
+    rows.push(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(buttons.slice(index, index + 5))
+    );
+  }
 
   await interaction.reply({
     content: "Choose which mode to start this match as:",
-    components: [row],
+    components: rows,
     ephemeral: true,
   });
 }
@@ -462,17 +396,7 @@ export async function handleLeaveQueueButton(
     return;
   }
 
-  const rendered = await renderTicketMessage(ticketId);
-
-  if (!rendered) {
-    await interaction.reply({
-      content: "You left the queue, but the ticket could not refresh.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.update(rendered);
+  await completeTicketAction(interaction, ticketId, "You left the queue.");
 }
 
 export async function handleRandomizeTeams(
@@ -507,7 +431,7 @@ export async function handleRandomizeTeams(
 
   if (!modeSupportsRandomTeams(ticket.started_mode)) {
     await interaction.reply({
-      content: "Random teams are only available for Veilbreak and Battleship.",
+      content: "Random teams are only available for Veilbreak, Battleship, and Ringus.",
       ephemeral: true,
     });
     return;
@@ -529,10 +453,10 @@ export async function handleRandomizeTeams(
     ),
   ];
 
-  if (playerIds.length < 2 || playerIds.length % 2 !== 0) {
+  if (!canRandomizeTeamRoster(playerIds, ticket.started_mode)) {
     await interaction.reply({
       content:
-        "Teams need an even number of players before they can be randomized.",
+        "The roster must fit this mode before teams can be randomized: Veilbreak needs 4 players, Ringus needs 6, and Battleship needs 6, 8, or 10 unique players.",
       ephemeral: true,
     });
     return;
@@ -549,17 +473,7 @@ export async function handleRandomizeTeams(
     return;
   }
 
-  const rendered = await renderTicketMessage(ticketId);
-
-  if (!rendered) {
-    await interaction.reply({
-      content: "Teams were randomized, but the ticket could not refresh.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.update(rendered);
+  await completeTicketAction(interaction, ticketId, "Teams assigned. See the shared ticket for your team.");
 }
 
 export async function handleStartGameAsMode(
@@ -604,17 +518,9 @@ export async function handleStartGameAsMode(
   }
 
   const acceptances = await getAcceptances(ticketId);
-  const playerAcceptances = getPlayerAcceptances(acceptances);
-  const requiredAcceptedPlayers = getRequiredAcceptedPlayersForMode(
-    ticket,
-    startedMode
-  );
-
-  if (playerAcceptances.length < requiredAcceptedPlayers) {
+  if (!canStartModeWithPlayers(ticket, startedMode, acceptances)) {
     await interaction.reply({
-      content: `You need ${requiredAcceptedPlayers} accepted player${
-        requiredAcceptedPlayers === 1 ? "" : "s"
-      } to start as ${getStartModeLabel(startedMode)}.`,
+      content: `The current roster cannot start as ${getStartModeLabel(startedMode)}.\n\n${getPlayerRequirementText(ticket)}`,
       ephemeral: true,
     });
     return;
@@ -630,38 +536,13 @@ export async function handleStartGameAsMode(
     return;
   }
 
-  const rendered = await renderTicketMessage(ticketId);
-
-  if (!rendered) {
-    await interaction.reply({
-      content: `Game started as **${getStartModeLabel(
-        startedMode
-      )}**, but failed to refresh the ticket.`,
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.update({
-    content: `Game started as **${getStartModeLabel(startedMode)}**.`,
-    components: [],
-  });
-
-  if (ticket.message_id) {
-    try {
-      await interaction.channel?.messages.fetch(ticket.message_id).then((msg) =>
-        msg.edit(rendered)
-      );
-    } catch (error) {
-      console.error("Failed to refresh public ticket after mode start:", error);
-    }
-  }
+  await completeTicketAction(interaction, ticketId, "Match started. The two-hour auto-finish timer is running.");
 }
 
 export async function handleCloseTicket(
   interaction: ButtonInteraction,
   ticketId: string,
-  newStatus: "finished" | "wasnt_played" | "cancelled"
+  newStatus: "finished" | "cancelled"
 ) {
   const ticket = await fetchTicket(ticketId);
 
@@ -693,36 +574,20 @@ export async function handleCloseTicket(
 
   if (!success) {
     await interaction.reply({
-      content: "Could not update this ticket.",
+      content: newStatus === 'finished' && ticket.status === 'open'
+        ? 'Start the match before marking it finished. Use Cancel Ticket to close an unstarted match.'
+        : 'Could not update this ticket. It may have changed; please check its current roster and status.',
       ephemeral: true,
     });
     return;
   }
 
-  const deleteStatuses: Array<typeof newStatus> = ["wasnt_played", "cancelled"];
-
-  if (deleteStatuses.includes(newStatus)) {
-    await interaction.reply({
-      content:
-        newStatus === "wasnt_played"
-          ? "This ticket has been marked as wasn't played and removed."
-          : "This ticket has been cancelled and removed.",
-      ephemeral: true,
-    });
+  if (newStatus === "cancelled") {
+    await interaction.reply({ content: "This ticket has been cancelled and removed.", ephemeral: true });
 
     await deleteTicketMessage(interaction.client, ticket);
     return;
   }
 
-  const rendered = await renderTicketMessage(ticketId);
-
-  if (!rendered) {
-    await interaction.reply({
-      content: "Ticket updated, but failed to refresh the message.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  await interaction.update(rendered);
+  await completeTicketAction(interaction, ticketId, "Match finished.");
 }

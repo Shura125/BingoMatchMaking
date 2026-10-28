@@ -1,11 +1,14 @@
 import { MatchTicket } from "./types";
 
 export type GameModeId =
+  | "conquest"
+  | "legacy_bingo"
   | "veilbreak"
   | "base_game"
   | "scadubingo"
   | "legacy_dungeons"
   | "cluedo"
+  | "ringus"
   | "battleship";
 
 export type GameModeGroup = "bingo" | "casual_games";
@@ -14,10 +17,12 @@ export type GameModeSelectGroup = GameModeGroup | "all";
 export type GameModeConfig = {
   id: GameModeId;
   label: string;
+  emoji?: string;
   description: string;
   group: GameModeGroup;
   totalPlayers: number;
   maxPlayers: number;
+  allowedPlayerCounts: readonly number[];
   quickCommandName: string;
   quickCommandDescription: string;
   websiteUrl?: string;
@@ -30,12 +35,45 @@ export type GameModeFlags = Pick<MatchTicket, GameModeId>;
 
 export const GAME_MODES: readonly GameModeConfig[] = [
   {
+    id: "conquest",
+    label: "Conquest",
+    emoji: "<:conquest_dragonkin:1564861211047366686>",
+    description: "Search for a 1v1 Conquest Bingo match.",
+    group: "bingo",
+    totalPlayers: 2,
+    maxPlayers: 2,
+    allowedPlayerCounts: [2],
+    quickCommandName: "conquest",
+    quickCommandDescription:
+      "Create a casual Conquest matchmaking ticket searching for 1 hour.",
+    usesLobbyCode: true,
+    usesGameSeed: true,
+    supportsRandomTeams: false,
+  },
+  {
+    id: "legacy_bingo",
+    label: "Legacy Bingo",
+    description: "Search for a 1v1 Legacy Bingo match.",
+    group: "bingo",
+    totalPlayers: 2,
+    maxPlayers: 2,
+    allowedPlayerCounts: [2],
+    quickCommandName: "legacybingo",
+    quickCommandDescription:
+      "Create a casual Legacy Bingo matchmaking ticket searching for 1 hour.",
+    usesLobbyCode: true,
+    usesGameSeed: true,
+    supportsRandomTeams: false,
+  },
+  {
     id: "veilbreak",
     label: "Veilbreak",
-    description: "Search for a Veilbreak match.",
+    emoji: "<:vcc_flask:1564861136975700100>",
+    description: "Search for a 2v2 Veilbreak Bingo match.",
     group: "bingo",
     totalPlayers: 4,
     maxPlayers: 4,
+    allowedPlayerCounts: [4],
     quickCommandName: "veilbreak",
     quickCommandDescription:
       "Create a casual Veilbreak matchmaking ticket searching for 1 hour.",
@@ -46,10 +84,11 @@ export const GAME_MODES: readonly GameModeConfig[] = [
   {
     id: "base_game",
     label: "Base Game",
-    description: "Search for a Base Game match.",
+    description: "Search for a 1v1 Base Game Bingo match.",
     group: "bingo",
     totalPlayers: 2,
     maxPlayers: 2,
+    allowedPlayerCounts: [2],
     quickCommandName: "basegame",
     quickCommandDescription:
       "Create a casual Base Game matchmaking ticket searching for 1 hour.",
@@ -60,10 +99,12 @@ export const GAME_MODES: readonly GameModeConfig[] = [
   {
     id: "scadubingo",
     label: "Scadubingo",
-    description: "Search for a Scadubingo match.",
+    emoji: "<:scadubingo_cross:1564861186703491175>",
+    description: "Search for a 1v1 Scadubingo match.",
     group: "bingo",
     totalPlayers: 2,
     maxPlayers: 2,
+    allowedPlayerCounts: [2],
     quickCommandName: "scadubingo",
     quickCommandDescription:
       "Create a casual Scadubingo matchmaking ticket searching for 1 hour.",
@@ -78,6 +119,7 @@ export const GAME_MODES: readonly GameModeConfig[] = [
     group: "bingo",
     totalPlayers: 2,
     maxPlayers: 2,
+    allowedPlayerCounts: [2],
     quickCommandName: "legacydungeons",
     quickCommandDescription:
       "Create a casual Legacy Dungeons matchmaking ticket searching for 1 hour.",
@@ -92,6 +134,7 @@ export const GAME_MODES: readonly GameModeConfig[] = [
     group: "casual_games",
     totalPlayers: 6,
     maxPlayers: 6,
+    allowedPlayerCounts: [6],
     quickCommandName: "cluedo",
     quickCommandDescription:
       "Create a casual Cluedo matchmaking ticket searching for 1 hour.",
@@ -103,14 +146,31 @@ export const GAME_MODES: readonly GameModeConfig[] = [
   {
     id: "battleship",
     label: "Battleship",
-    description: "Search for a 6-player Battleship match, expandable to 10.",
+    emoji: "<:battleshiplogo:1564861505298632714>",
+    description: "Search for a 3v3, 4v4, or 5v5 Battleship match.",
     group: "casual_games",
     totalPlayers: 6,
     maxPlayers: 10,
+    allowedPlayerCounts: [6, 8, 10],
     quickCommandName: "battleship",
     quickCommandDescription:
       "Create a casual Battleship matchmaking ticket searching for 1 hour.",
     websiteUrl: "https://kcbrazos.github.io/Elden-Battleship/#/",
+    usesLobbyCode: false,
+    usesGameSeed: false,
+    supportsRandomTeams: true,
+  },
+  {
+    id: "ringus",
+    label: "Ringus",
+    description: "Search for a 3v3 Ringus match.",
+    group: "casual_games",
+    totalPlayers: 6,
+    maxPlayers: 6,
+    allowedPlayerCounts: [6],
+    quickCommandName: "ringus",
+    quickCommandDescription:
+      "Create a casual 3v3 Ringus matchmaking ticket searching for 1 hour.",
     usesLobbyCode: false,
     usesGameSeed: false,
     supportsRandomTeams: true,
@@ -214,7 +274,8 @@ export function getRequiredAcceptedPlayersForMode(
   ticket: MatchTicket,
   modeId: GameModeId
 ): number {
-  const totalPlayers = getGameMode(modeId)?.totalPlayers ?? 2;
+  const totalPlayers = modeId === 'battleship' && [3,4,5].includes(ticket.battleship_team_size ?? 0)
+    ? ticket.battleship_team_size! * 2 : getGameMode(modeId)?.totalPlayers ?? 2;
   const hostPlayerCount = ticket.host_is_player ? 1 : 0;
 
   return totalPlayers - hostPlayerCount;
