@@ -21,7 +21,7 @@ import {
   leaveSpecificTicket,
   setRandomizedTeams,
   startTicketGame,
-  userHasActiveCasualTicketOrAcceptance,
+  userHasActiveCasualHostedTicket,
 } from "../services/ticketService";
 import {
   getPlayerAcceptances,
@@ -86,14 +86,14 @@ export async function handleAcceptTicket(
   }
 
   if (ticket.matchmaking_type === "casual") {
-    const alreadyActiveCasual = await userHasActiveCasualTicketOrAcceptance(
-      interaction.user.id
+    const alreadyHostingCasual = await userHasActiveCasualHostedTicket(
+      interaction.user.id, ticket.guild_id
     );
 
-    if (alreadyActiveCasual) {
+    if (alreadyHostingCasual) {
       await interaction.followUp({
         content:
-          "You already have an active casual matchmaking ticket, or you accepted another casual ticket that is still active.",
+          "You are hosting another active casual matchmaking ticket. Finish or cancel your hosted ticket before joining another one.",
         ephemeral: true,
       });
       return;

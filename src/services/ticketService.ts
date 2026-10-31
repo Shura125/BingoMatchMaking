@@ -99,6 +99,17 @@ export async function userHasActiveCasualTicketOrAcceptance(
   return !!acceptedTickets && acceptedTickets.length > 0;
 }
 
+export async function userHasActiveCasualHostedTicket(discordId: string, guildId: string): Promise<boolean> {
+  const { data, error } = await supabase.from('bot_match_tickets').select('id')
+    .eq('creator_discord_id', discordId).eq('guild_id', guildId)
+    .eq('matchmaking_type', 'casual').in('status', activeStatuses).limit(1);
+  if (error) {
+    console.error('Failed to check hosted casual tickets:', error);
+    return true;
+  }
+  return Boolean(data?.length);
+}
+
 export async function fetchTicket(ticketId: string): Promise<MatchTicket | null> {
   const { data, error } = await supabase
     .from("bot_match_tickets")
